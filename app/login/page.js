@@ -11,9 +11,19 @@ export default function Login() {
   async function handleLogin() {
     setLoading(true)
     setError('')
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       setError(error.message)
+      setLoading(false)
+      return
+    }
+    const { data: clientData } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('user_id', data.user.id)
+      .single()
+    if (clientData) {
+      window.location.href = '/client'
     } else {
       window.location.href = '/'
     }
