@@ -92,6 +92,11 @@ export default function Home() {
     setExpandedDay(null)
   }
 
+  async function signOut() {
+    await supabase.auth.signOut()
+    window.location.href = '/login'
+  }
+
   if (!authed) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-sm text-gray-400">Loading…</div>
@@ -103,7 +108,10 @@ export default function Home() {
       <div className="max-w-2xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-200">
           <span className="text-lg font-medium">coach<span className="text-gray-400 font-normal">.phoebe</span></span>
-          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-medium">PR</div>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-medium">PR</div>
+            <button onClick={signOut} className="text-xs text-gray-400 hover:text-gray-600">Sign out</button>
+          </div>
         </div>
         <div className="grid grid-cols-3 gap-3 mb-8">
           {[['Active clients', clients.length.toString()], ['Diaries today', '0'], ['Unread messages', '0']].map(([label, value]) => (

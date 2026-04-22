@@ -18,7 +18,6 @@ export default function ClientPage() {
   const [expandedDay, setExpandedDay] = useState(null)
   const [authed, setAuthed] = useState(false)
   const [clientData, setClientData] = useState(null)
-  const [diaryEntries, setDiaryEntries] = useState([])
   const [messages, setMessages] = useState([
     { from: 'coach', text: "Hi Sarah! Great work this week. Keep it up!", time: 'Mon 14 April, 9:00am' },
   ])
@@ -67,9 +66,13 @@ export default function ClientPage() {
     setMsgInput('')
   }
 
+  async function signOut() {
+    await supabase.auth.signOut()
+    window.location.href = '/login'
+  }
+
   async function submitDiary() {
     setDiarySubmitted(true)
-    setDiaryEntries([{ date: 'Today', ...diaryForm }, ...diaryEntries])
   }
 
   if (!authed) return (
@@ -82,7 +85,10 @@ export default function ClientPage() {
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-200">
         <span className="text-lg font-medium">coach<span className="text-gray-400 font-normal">.phoebe</span></span>
-        <div className="text-sm text-gray-500">Hi {clientData.name.split(' ')[0]} 👋</div>
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-gray-500">Hi {clientData.name.split(' ')[0]} 👋</div>
+          <button onClick={signOut} className="text-xs text-gray-400 hover:text-gray-600">Sign out</button>
+        </div>
       </div>
 
       <div className="flex border-b border-gray-200 mb-6">
