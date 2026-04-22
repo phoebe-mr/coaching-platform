@@ -72,7 +72,32 @@ export default function ClientPage() {
   }
 
   async function submitDiary() {
-    setDiarySubmitted(true)
+    const today = new Date().toISOString().split('T')[0]
+    console.log('submitting diary for client:', clientData.id)
+    const { data, error } = await supabase.from('diary_entries').insert({
+      client_id: clientData.id,
+      date: today,
+      breakfast: diaryForm.breakfast,
+      lunch: diaryForm.lunch,
+      dinner: diaryForm.dinner,
+      snacks: diaryForm.snacks,
+      protein: diaryForm.protein ? parseInt(diaryForm.protein) : null,
+      carbs: diaryForm.carbs ? parseInt(diaryForm.carbs) : null,
+      fat: diaryForm.fat ? parseInt(diaryForm.fat) : null,
+      calories: diaryForm.calories ? parseInt(diaryForm.calories) : null,
+      notes: diaryForm.notes,
+    }).select()
+    console.log('result:', data, 'error:', error)
+    if (error) {
+      console.error('Error saving diary:', error)
+    } else {
+      setDiarySubmitted(true)
+    }
+  }
+
+  function resetDiary() {
+    setDiarySubmitted(false)
+    setDiaryForm({ breakfast: '', lunch: '', dinner: '', snacks: '', protein: '', carbs: '', fat: '', calories: '', notes: '' })
   }
 
   if (!authed) return (
@@ -218,7 +243,10 @@ export default function ClientPage() {
                 <textarea value={diaryForm.notes} onChange={e => setDiaryForm({ ...diaryForm, notes: e.target.value })} placeholder="Anything to flag about today's eating?" rows={2} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-gray-400 resize-none" />
               </div>
               {diarySubmitted ? (
-                <div className="text-sm text-green-600 font-medium text-center py-1">Diary logged!</div>
+                <div className="flex flex-col gap-2">
+                  <div className="text-sm text-green-600 font-medium text-center py-1">Diary logged!</div>
+                  <button onClick={resetDiary} className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg">Log another entry</button>
+                </div>
               ) : (
                 <button onClick={submitDiary} className="w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors">Log today's diary</button>
               )}
