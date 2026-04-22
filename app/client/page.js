@@ -3,12 +3,12 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
 const initialPlan = [
-  { day: 'Mon', sessions: [{ type: 'strength', title: 'Lower body', goal: 'Focus on depth in squats. Progressive overload on hip thrust — aim to beat last week.', exercises: [{ name: 'Goblet squat', sets: 4, reps: 8, tempo: '3-1-1-0', notes: 'Keep chest tall, weight in heels', weights: ['','','',''] }, { name: 'Romanian deadlift', sets: 3, reps: 10, tempo: '3-0-1-0', notes: 'Hinge from hips, soft knees', weights: ['','',''] }, { name: 'Hip thrust', sets: 4, reps: 12, tempo: '1-2-1-0', notes: 'Full squeeze at top', weights: ['','','',''] }, { name: 'Split squat', sets: 3, reps: 10, tempo: '2-1-1-0', notes: 'Modify to reverse lunge if knees ache', weights: ['','',''] }], rpe: '', sessionNotes: '' }] },
-  { day: 'Tue', sessions: [{ type: 'run', title: 'Easy run — 30 min', goal: 'Keep effort conversational throughout. No racing today.', exercises: [{ name: 'Easy run', sets: 1, reps: 1, tempo: '', notes: 'Zone 2 pace. Focus on cadence ~170 spm.', weights: [''] }], rpe: '', sessionNotes: '' }] },
-  { day: 'Wed', sessions: [{ type: 'strength', title: 'Upper body — push', goal: 'Quality over quantity. Control the lowering phase on all pressing.', exercises: [{ name: 'DB press', sets: 4, reps: 8, tempo: '3-1-1-0', notes: '', weights: ['','','',''] }, { name: 'Incline press', sets: 3, reps: 10, tempo: '3-0-1-0', notes: '', weights: ['','',''] }, { name: 'Lateral raise', sets: 3, reps: 15, tempo: '2-0-2-0', notes: 'Light weight, full range', weights: ['','',''] }, { name: 'Tricep dip', sets: 3, reps: 12, tempo: '2-1-1-0', notes: '', weights: ['','',''] }], rpe: '', sessionNotes: '' }] },
-  { day: 'Thu', sessions: [{ type: 'run', title: 'Tempo intervals', goal: 'Hit the effort targets — use perceived effort not pace.', exercises: [{ name: 'Warm-up jog', sets: 1, reps: 1, tempo: '', notes: '10 min easy', weights: [''] }, { name: 'Tempo interval', sets: 3, reps: 1, tempo: '', notes: '8 min comfortably hard, 2 min walk recovery', weights: ['','',''] }, { name: 'Cool-down jog', sets: 1, reps: 1, tempo: '', notes: '10 min easy', weights: [''] }], rpe: '', sessionNotes: '' }, { type: 'strength', title: 'Upper body — pull', goal: 'Focus on scapular retraction. Reduce assistance on pull-ups if feeling strong.', exercises: [{ name: 'Assisted pull-up', sets: 4, reps: 6, tempo: '2-1-2-0', notes: 'Full hang at bottom', weights: ['','','',''] }, { name: 'Bent-over row', sets: 3, reps: 10, tempo: '2-1-1-0', notes: 'Neutral spine throughout', weights: ['','',''] }, { name: 'Face pull', sets: 3, reps: 15, tempo: '2-0-2-0', notes: 'External rotation at end range', weights: ['','',''] }, { name: 'Bicep curl', sets: 3, reps: 12, tempo: '2-1-1-0', notes: '', weights: ['','',''] }], rpe: '', sessionNotes: '' }] },
-  { day: 'Fri', sessions: [{ type: 'strength', title: 'Full body — power', goal: 'Prioritise quality on deadlift. Rest fully between sets.', exercises: [{ name: 'Deadlift', sets: 4, reps: 5, tempo: '1-0-1-0', notes: 'Brace hard, push floor away', weights: ['','','',''] }, { name: 'Box jump', sets: 3, reps: 6, tempo: '', notes: 'Step down, never jump down', weights: ['','',''] }, { name: 'KB swing', sets: 3, reps: 15, tempo: '', notes: 'Hip hinge power, not squat', weights: ['','',''] }, { name: 'Plank', sets: 3, reps: 1, tempo: '', notes: '30 sec hold', weights: ['','',''] }], rpe: '', sessionNotes: '' }] },
-  { day: 'Sat', sessions: [{ type: 'run', title: 'Long run — 50–55 min', goal: 'Easy effort throughout. Aerobic base work — resist the urge to push.', exercises: [{ name: 'Long run', sets: 1, reps: 1, tempo: '', notes: 'Fuel at 40 min if needed.', weights: [''] }], rpe: '', sessionNotes: '' }] },
+  { day: 'Mon', sessions: [{ type: 'strength', title: 'Lower body', goal: 'Focus on depth in squats. Progressive overload on hip thrust — aim to beat last week.', exercises: [{ name: 'Goblet squat', sets: 4, reps: 8, tempo: '3-1-1-0', notes: 'Keep chest tall, weight in heels', weights: ['','','',''] }, { name: 'Romanian deadlift', sets: 3, reps: 10, tempo: '3-0-1-0', notes: 'Hinge from hips, soft knees', weights: ['','',''] }, { name: 'Hip thrust', sets: 4, reps: 12, tempo: '1-2-1-0', notes: 'Full squeeze at top', weights: ['','','',''] }, { name: 'Split squat', sets: 3, reps: 10, tempo: '2-1-1-0', notes: 'Modify to reverse lunge if knees ache', weights: ['','',''] }], rpe: '', sessionNotes: '', saved: false }] },
+  { day: 'Tue', sessions: [{ type: 'run', title: 'Easy run — 30 min', goal: 'Keep effort conversational throughout. No racing today.', exercises: [{ name: 'Easy run', sets: 1, reps: 1, tempo: '', notes: 'Zone 2 pace. Focus on cadence ~170 spm.', weights: [''] }], rpe: '', sessionNotes: '', saved: false }] },
+  { day: 'Wed', sessions: [{ type: 'strength', title: 'Upper body — push', goal: 'Quality over quantity. Control the lowering phase on all pressing.', exercises: [{ name: 'DB press', sets: 4, reps: 8, tempo: '3-1-1-0', notes: '', weights: ['','','',''] }, { name: 'Incline press', sets: 3, reps: 10, tempo: '3-0-1-0', notes: '', weights: ['','',''] }, { name: 'Lateral raise', sets: 3, reps: 15, tempo: '2-0-2-0', notes: 'Light weight, full range', weights: ['','',''] }, { name: 'Tricep dip', sets: 3, reps: 12, tempo: '2-1-1-0', notes: '', weights: ['','',''] }], rpe: '', sessionNotes: '', saved: false }] },
+  { day: 'Thu', sessions: [{ type: 'run', title: 'Tempo intervals', goal: 'Hit the effort targets — use perceived effort not pace.', exercises: [{ name: 'Warm-up jog', sets: 1, reps: 1, tempo: '', notes: '10 min easy', weights: [''] }, { name: 'Tempo interval', sets: 3, reps: 1, tempo: '', notes: '8 min comfortably hard, 2 min walk recovery', weights: ['','',''] }, { name: 'Cool-down jog', sets: 1, reps: 1, tempo: '', notes: '10 min easy', weights: [''] }], rpe: '', sessionNotes: '', saved: false }, { type: 'strength', title: 'Upper body — pull', goal: 'Focus on scapular retraction. Reduce assistance on pull-ups if feeling strong.', exercises: [{ name: 'Assisted pull-up', sets: 4, reps: 6, tempo: '2-1-2-0', notes: 'Full hang at bottom', weights: ['','','',''] }, { name: 'Bent-over row', sets: 3, reps: 10, tempo: '2-1-1-0', notes: 'Neutral spine throughout', weights: ['','',''] }, { name: 'Face pull', sets: 3, reps: 15, tempo: '2-0-2-0', notes: 'External rotation at end range', weights: ['','',''] }, { name: 'Bicep curl', sets: 3, reps: 12, tempo: '2-1-1-0', notes: '', weights: ['','',''] }], rpe: '', sessionNotes: '', saved: false }] },
+  { day: 'Fri', sessions: [{ type: 'strength', title: 'Full body — power', goal: 'Prioritise quality on deadlift. Rest fully between sets.', exercises: [{ name: 'Deadlift', sets: 4, reps: 5, tempo: '1-0-1-0', notes: 'Brace hard, push floor away', weights: ['','','',''] }, { name: 'Box jump', sets: 3, reps: 6, tempo: '', notes: 'Step down, never jump down', weights: ['','',''] }, { name: 'KB swing', sets: 3, reps: 15, tempo: '', notes: 'Hip hinge power, not squat', weights: ['','',''] }, { name: 'Plank', sets: 3, reps: 1, tempo: '', notes: '30 sec hold', weights: ['','',''] }], rpe: '', sessionNotes: '', saved: false }] },
+  { day: 'Sat', sessions: [{ type: 'run', title: 'Long run — 50–55 min', goal: 'Easy effort throughout. Aerobic base work — resist the urge to push.', exercises: [{ name: 'Long run', sets: 1, reps: 1, tempo: '', notes: 'Fuel at 40 min if needed.', weights: [''] }], rpe: '', sessionNotes: '', saved: false }] },
   { day: 'Sun', sessions: [] },
 ]
 
@@ -27,15 +27,9 @@ export default function ClientPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        window.location.href = '/login'
-        return
-      }
+      if (!session) { window.location.href = '/login'; return }
       supabase.from('clients').select('*').eq('user_id', session.user.id).single().then(({ data, error }) => {
-        if (error || !data) {
-          window.location.href = '/login'
-          return
-        }
+        if (error || !data) { window.location.href = '/login'; return }
         setClientData(data)
         setAuthed(true)
       })
@@ -60,6 +54,70 @@ export default function ClientPage() {
     setPlan(p)
   }
 
+  async function saveSession(dayIdx, sessionIdx) {
+    const session = plan[dayIdx].sessions[sessionIdx]
+    const dayObj = plan[dayIdx]
+
+    const { data: sessionData, error: sessionError } = await supabase
+      .from('sessions')
+      .insert({
+        client_id: clientData.id,
+        week: clientData.week,
+        day: dayObj.day,
+        type: session.type,
+        title: session.title,
+        goal: session.goal,
+      })
+      .select()
+      .single()
+
+    if (sessionError) { console.error('Error saving session:', sessionError); return }
+
+    const { data: exerciseRows, error: exError } = await supabase
+      .from('exercises')
+      .insert(session.exercises.map((ex, i) => ({
+        session_id: sessionData.id,
+        name: ex.name,
+        sets: ex.sets,
+        reps: ex.reps,
+        tempo: ex.tempo,
+        notes: ex.notes,
+        order: i,
+      })))
+      .select()
+
+    if (exError) { console.error('Error saving exercises:', exError); return }
+
+    const weightLogs = []
+    session.exercises.forEach((ex, exIdx) => {
+      ex.weights.forEach((w, setIdx) => {
+        if (w !== '') {
+          weightLogs.push({
+            exercise_id: exerciseRows[exIdx].id,
+            client_id: clientData.id,
+            set_number: setIdx + 1,
+            weight: parseFloat(w),
+          })
+        }
+      })
+    })
+
+    if (weightLogs.length > 0) {
+      await supabase.from('exercise_logs').insert(weightLogs)
+    }
+
+    await supabase.from('session_logs').insert({
+      session_id: sessionData.id,
+      client_id: clientData.id,
+      rpe: session.rpe || null,
+      notes: session.sessionNotes || null,
+    })
+
+    const p = JSON.parse(JSON.stringify(plan))
+    p[dayIdx].sessions[sessionIdx].saved = true
+    setPlan(p)
+  }
+
   function sendMessage() {
     if (!msgInput.trim()) return
     setMessages([...messages, { from: 'client', text: msgInput, time: 'just now' }])
@@ -73,8 +131,7 @@ export default function ClientPage() {
 
   async function submitDiary() {
     const today = new Date().toISOString().split('T')[0]
-    console.log('submitting diary for client:', clientData.id)
-    const { data, error } = await supabase.from('diary_entries').insert({
+    const { error } = await supabase.from('diary_entries').insert({
       client_id: clientData.id,
       date: today,
       breakfast: diaryForm.breakfast,
@@ -86,13 +143,8 @@ export default function ClientPage() {
       fat: diaryForm.fat ? parseInt(diaryForm.fat) : null,
       calories: diaryForm.calories ? parseInt(diaryForm.calories) : null,
       notes: diaryForm.notes,
-    }).select()
-    console.log('result:', data, 'error:', error)
-    if (error) {
-      console.error('Error saving diary:', error)
-    } else {
-      setDiarySubmitted(true)
-    }
+    })
+    if (!error) setDiarySubmitted(true)
   }
 
   function resetDiary() {
@@ -144,6 +196,7 @@ export default function ClientPage() {
                           <div key={si} className="flex gap-2 items-center">
                             <span className={`text-xs font-medium px-2 py-0.5 rounded flex-shrink-0 ${s.type === 'strength' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{s.type === 'strength' ? 'Strength' : 'Run'}</span>
                             <span className="text-sm font-medium">{s.title}</span>
+                            {s.saved && <span className="text-xs text-green-600 font-medium">✓ Saved</span>}
                           </div>
                         ))}
                       </div>
@@ -202,10 +255,15 @@ export default function ClientPage() {
                                 </div>
                                 {session.rpe && <div className="text-xs text-gray-400 mt-1.5">{session.rpe <= 4 ? 'Easy — felt comfortable' : session.rpe <= 7 ? 'Moderate — good effort' : 'Hard — pushed it today'}</div>}
                               </div>
-                              <div>
+                              <div className="mb-3">
                                 <div className="text-xs text-gray-500 mb-1.5">Notes for your coach</div>
                                 <textarea value={session.sessionNotes} onChange={e => updateSessionNotes(dayIdx, sessionIdx, e.target.value)} placeholder="How did the session feel? Anything to flag..." rows={2} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-300 resize-none bg-white" />
                               </div>
+                              {session.saved ? (
+                                <div className="text-sm text-green-600 font-medium text-center py-1">Session saved! ✓</div>
+                              ) : (
+                                <button onClick={() => saveSession(dayIdx, sessionIdx)} className="w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors">Save session</button>
+                              )}
                             </div>
                           </div>
                         ))}
