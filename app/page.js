@@ -13,11 +13,6 @@ const initialPlan = [
   { day: 'Sun', sessions: [] },
 ]
 
-const diary = [
-  { date: 'Today, Mon 14 April', meals: [{ label: 'Breakfast', food: 'Greek yoghurt, berries, granola, honey' }, { label: 'Lunch', food: 'Chicken and roasted veg wrap with hummus' }, { label: 'Snack', food: 'Apple, almonds' }, { label: 'Dinner', food: 'Salmon, sweet potato, steamed broccoli' }], protein: 112, carbs: 198, fat: 54, cals: 1740 },
-  { date: 'Sun 13 April', meals: [{ label: 'Breakfast', food: 'Avocado toast, poached eggs, coffee' }, { label: 'Lunch', food: 'Lentil soup, sourdough, side salad' }, { label: 'Dinner', food: 'Chicken stir-fry with rice noodles' }], protein: 98, carbs: 220, fat: 62, cals: 1810 },
-]
-
 export default function Home() {
   const [screen, setScreen] = useState('dashboard')
   const [activeClient, setActiveClient] = useState(null)
@@ -28,6 +23,7 @@ export default function Home() {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [authed, setAuthed] = useState(false)
+  const [diaryEntries, setDiaryEntries] = useState([])
   const [messages, setMessages] = useState([
     { from: 'client', text: "Hi Phoebe, my knees were aching during the split squats — should I modify?", time: 'Thu 10 April, 7:42pm' },
     { from: 'coach', text: "Yes — try a reverse lunge instead. Let me know how it feels!", time: 'Thu 10 April, 8:15pm' },
@@ -61,6 +57,19 @@ export default function Home() {
     })
   }, [])
 
+  async function openClient(client) {
+    setActiveClient(client)
+    setScreen('client')
+    setTab('plan')
+    setExpandedDay(null)
+    const { data, error } = await supabase
+      .from('diary_entries')
+      .select('*')
+      .eq('client_id', client.id)
+      .order('date', { ascending: false })
+    if (!error) setDiaryEntries(data)
+  }
+
   function updateWeight(dayIdx, sessionIdx, exIdx, setIdx, value) {
     const p = JSON.parse(JSON.stringify(plan))
     p[dayIdx].sessions[sessionIdx].exercises[exIdx].weights[setIdx] = value
@@ -83,13 +92,6 @@ export default function Home() {
     if (!msgInput.trim()) return
     setMessages([...messages, { from: 'coach', text: msgInput, time: 'just now' }])
     setMsgInput('')
-  }
-
-  function openClient(client) {
-    setActiveClient(client)
-    setScreen('client')
-    setTab('plan')
-    setExpandedDay(null)
   }
 
   async function signOut() {
@@ -279,22 +281,27 @@ export default function Home() {
 
       {tab === 'diary' && (
         <div className="flex flex-col gap-3">
-          {diary.map((d, i) => (
+          {diaryEntries.length === 0 ? (
+            <div className="text-sm text-gray-400 py-8 text-center">No diary entries yet</div>
+          ) : diaryEntries.map((d, i) => (
             <div key={i} className="bg-white border border-gray-200 rounded-xl p-4">
-              <div className="text-xs font-medium text-gray-500 mb-3">{d.date}</div>
+              <div className="text-xs font-medium text-gray-500 mb-3">{new Date(d.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
               <div className="flex flex-col gap-1.5 mb-3">
-                {d.meals.map((m, j) => (
-                  <div key={j} className="flex gap-2">
-                    <span className="text-xs font-medium text-gray-400 w-16 flex-shrink-0 pt-0.5">{m.label}</span>
-                    <span className="text-sm text-gray-800">{m.food}</span>
+                {[['Breakfast', d.breakfast], ['Lunch', d.lunch], ['Dinner', d.dinner], ['Snacks', d.snacks]].filter(([, v]) => v).map(([label, food]) => (
+                  <div key={label} className="flex gap-2">
+                    <span className="text-xs font-medium text-gray-400 w-16 flex-shrink-0 pt-0.5">{label}</span>
+                    <span className="text-sm text-gray-800">{food}</span>
                   </div>
                 ))}
               </div>
-              <div className="flex gap-4 pt-3 border-t border-gray-100">
-                {[['Protein', d.protein+'g'], ['Carbs', d.carbs+'g'], ['Fat', d.fat+'g'], ['Cals', '~'+d.cals]].map(([label, val]) => (
-                  <div key={label} className="text-xs text-gray-500">{label} <span className="font-medium text-gray-800">{val}</span></div>
-                ))}
-              </div>
+              {(d.protein || d.carbs || d.fat || d.calories) && (
+                <div className="flex gap-4 pt-3 border-t border-gray-100">
+                  {[['Protein', d.protein ? d.protein+'g' : '—'], ['Carbs', d.carbs ? d.carbs+'g' : '—'], ['Fat', d.fat ? d.fat+'g' : '—'], ['Cals', d.calories ? '~'+d.calories : '—']].map(([label, val]) => (
+                    <div key={label} className="text-xs text-gray-500">{label} <span className="font-medium text-gray-800">{val}</span></div>
+                  ))}
+                </div>
+              )}
+              {d.notes && <div className="text-xs text-gray-500 italic mt-2 pt-2 border-t border-gray-100">"{d.notes}"</div>}
             </div>
           ))}
         </div>
