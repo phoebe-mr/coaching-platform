@@ -1,25 +1,12 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { supabase } from './lib/supabase'
-
-const initialPlan = [
-  { day: 'Mon', sessions: [{ type: 'strength', title: 'Lower body', goal: 'Focus on depth in squats. Progressive overload on hip thrust — aim to beat last week.', exercises: [{ name: 'Goblet squat', sets: 4, reps: 8, tempo: '3-1-1-0', notes: 'Keep chest tall, weight in heels', weights: ['','','',''] }, { name: 'Romanian deadlift', sets: 3, reps: 10, tempo: '3-0-1-0', notes: 'Hinge from hips, soft knees', weights: ['','',''] }, { name: 'Hip thrust', sets: 4, reps: 12, tempo: '1-2-1-0', notes: 'Full squeeze at top', weights: ['','','',''] }, { name: 'Split squat', sets: 3, reps: 10, tempo: '2-1-1-0', notes: 'Modify to reverse lunge if knees ache', weights: ['','',''] }], rpe: '', sessionNotes: '' }] },
-  { day: 'Tue', sessions: [{ type: 'run', title: 'Easy run — 30 min', goal: 'Keep effort conversational throughout. No racing today.', exercises: [{ name: 'Easy run', sets: 1, reps: 1, tempo: '', notes: 'Zone 2 pace. Focus on cadence ~170 spm.', weights: [''] }], rpe: '', sessionNotes: '' }] },
-  { day: 'Wed', sessions: [{ type: 'strength', title: 'Upper body — push', goal: 'Quality over quantity. Control the lowering phase on all pressing.', exercises: [{ name: 'DB press', sets: 4, reps: 8, tempo: '3-1-1-0', notes: '', weights: ['','','',''] }, { name: 'Incline press', sets: 3, reps: 10, tempo: '3-0-1-0', notes: '', weights: ['','',''] }, { name: 'Lateral raise', sets: 3, reps: 15, tempo: '2-0-2-0', notes: 'Light weight, full range', weights: ['','',''] }, { name: 'Tricep dip', sets: 3, reps: 12, tempo: '2-1-1-0', notes: '', weights: ['','',''] }], rpe: '', sessionNotes: '' }] },
-  { day: 'Thu', sessions: [{ type: 'run', title: 'Tempo intervals', goal: 'Hit the effort targets — use perceived effort not pace.', exercises: [{ name: 'Warm-up jog', sets: 1, reps: 1, tempo: '', notes: '10 min easy', weights: [''] }, { name: 'Tempo interval', sets: 3, reps: 1, tempo: '', notes: '8 min comfortably hard, 2 min walk recovery', weights: ['','',''] }, { name: 'Cool-down jog', sets: 1, reps: 1, tempo: '', notes: '10 min easy', weights: [''] }], rpe: '', sessionNotes: '' }, { type: 'strength', title: 'Upper body — pull', goal: 'Focus on scapular retraction. Reduce assistance on pull-ups if feeling strong.', exercises: [{ name: 'Assisted pull-up', sets: 4, reps: 6, tempo: '2-1-2-0', notes: 'Full hang at bottom', weights: ['','','',''] }, { name: 'Bent-over row', sets: 3, reps: 10, tempo: '2-1-1-0', notes: 'Neutral spine throughout', weights: ['','',''] }, { name: 'Face pull', sets: 3, reps: 15, tempo: '2-0-2-0', notes: 'External rotation at end range', weights: ['','',''] }, { name: 'Bicep curl', sets: 3, reps: 12, tempo: '2-1-1-0', notes: '', weights: ['','',''] }], rpe: '', sessionNotes: '' }] },
-  { day: 'Fri', sessions: [{ type: 'strength', title: 'Full body — power', goal: 'Prioritise quality on deadlift. Rest fully between sets.', exercises: [{ name: 'Deadlift', sets: 4, reps: 5, tempo: '1-0-1-0', notes: 'Brace hard, push floor away', weights: ['','','',''] }, { name: 'Box jump', sets: 3, reps: 6, tempo: '', notes: 'Step down, never jump down', weights: ['','',''] }, { name: 'KB swing', sets: 3, reps: 15, tempo: '', notes: 'Hip hinge power, not squat', weights: ['','',''] }, { name: 'Plank', sets: 3, reps: 1, tempo: '', notes: '30 sec hold', weights: ['','',''] }], rpe: '', sessionNotes: '' }] },
-  { day: 'Sat', sessions: [{ type: 'run', title: 'Long run — 50–55 min', goal: 'Easy effort throughout. Aerobic base work — resist the urge to push.', exercises: [{ name: 'Long run', sets: 1, reps: 1, tempo: '', notes: 'Fuel at 40 min if needed.', weights: [''] }], rpe: '', sessionNotes: '' }] },
-  { day: 'Sun', sessions: [] },
-]
 
 export default function Home() {
   const [screen, setScreen] = useState('dashboard')
   const [activeClient, setActiveClient] = useState(null)
   const [tab, setTab] = useState('plan')
-  const [plan, setPlan] = useState(initialPlan)
   const [expandedDay, setExpandedDay] = useState(null)
-  const [viewMode, setViewMode] = useState('coach')
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [authed, setAuthed] = useState(false)
@@ -28,44 +15,48 @@ export default function Home() {
   const [msgInput, setMsgInput] = useState('')
   const [unreadCount, setUnreadCount] = useState(0)
   const [diariesToday, setDiariesToday] = useState(0)
+  const [planSessions, setPlanSessions] = useState([])
+  const [planLoading, setPlanLoading] = useState(false)
+  const [addingSessionDay, setAddingSessionDay] = useState(null)
+  const [newSessionForm, setNewSessionForm] = useState({ type: 'strength', title: '', goal: '' })
+  const [addingExerciseSession, setAddingExerciseSession] = useState(null)
+  const [newExerciseForm, setNewExerciseForm] = useState({ name: '', sets: 3, reps: 10, tempo: '', notes: '', superset: '' })
 
-  const router = useRouter()
   const colours = ['bg-blue-100 text-blue-700', 'bg-green-100 text-green-700', 'bg-pink-100 text-pink-700', 'bg-purple-100 text-purple-700', 'bg-amber-100 text-amber-700']
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        window.location.href = '/login'
-      } else {
-        setAuthed(true)
-        supabase.from('clients').select('*').then(({ data, error }) => {
-          if (!error) {
-            setClients(data.map((c, i) => ({
-              ...c,
-              initials: c.name.split(' ').map(n => n[0]).join(''),
-              colour: colours[i % colours.length],
-              meta: `Week ${c.week} of 12 · ${c.programme}`,
-              status: 'On track',
-            })))
-          }
-          setLoading(false)
-        })
-        const today = new Date().toISOString().split('T')[0]
-        supabase.from('messages').select('id', { count: 'exact' }).eq('from_coach', false).eq('read', false).then(({ count }) => {
-          setUnreadCount(count || 0)
-        })
-        supabase.from('diary_entries').select('id', { count: 'exact' }).eq('date', today).then(({ count }) => {
-          setDiariesToday(count || 0)
-        })
-      }
+      if (!session) { window.location.href = '/login'; return }
+      setAuthed(true)
+      supabase.from('clients').select('*').then(({ data, error }) => {
+        if (!error) setClients(data.map((c, i) => ({ ...c, initials: c.name.split(' ').map(n => n[0]).join(''), colour: colours[i % colours.length], meta: `Week ${c.week} of 12 · ${c.programme}`, status: 'On track' })))
+        setLoading(false)
+      })
+      const today = new Date().toISOString().split('T')[0]
+      supabase.from('messages').select('id', { count: 'exact' }).eq('from_coach', false).eq('read', false).then(({ count }) => setUnreadCount(count || 0))
+      supabase.from('diary_entries').select('id', { count: 'exact' }).eq('date', today).then(({ count }) => setDiariesToday(count || 0))
     })
   }, [])
+
+  async function loadPlan(clientId) {
+    setPlanLoading(true)
+    const { data: sessions } = await supabase.from('sessions').select('*').eq('client_id', clientId).eq('prescribed', true).order('id')
+    if (sessions && sessions.length > 0) {
+      const sessionIds = sessions.map(s => s.id)
+      const { data: exercises } = await supabase.from('exercises').select('*').in('session_id', sessionIds).order('order')
+      setPlanSessions(sessions.map(s => ({ ...s, exercises: exercises?.filter(e => e.session_id === s.id) || [] })))
+    } else {
+      setPlanSessions([])
+    }
+    setPlanLoading(false)
+  }
 
   async function openClient(client) {
     setActiveClient(client)
     setScreen('client')
     setTab('plan')
     setExpandedDay(null)
+    loadPlan(client.id)
     const { data: diary } = await supabase.from('diary_entries').select('*').eq('client_id', client.id).order('date', { ascending: false })
     if (diary) setDiaryEntries(diary)
     const { data: msgs } = await supabase.from('messages').select('*').eq('client_id', client.id).order('created_at', { ascending: true })
@@ -79,36 +70,42 @@ export default function Home() {
     }
   }
 
-  function updateWeight(dayIdx, sessionIdx, exIdx, setIdx, value) {
-    const p = JSON.parse(JSON.stringify(plan))
-    p[dayIdx].sessions[sessionIdx].exercises[exIdx].weights[setIdx] = value
-    setPlan(p)
+  async function addSession() {
+    if (!newSessionForm.title.trim()) return
+    const { data, error } = await supabase.from('sessions').insert({ client_id: activeClient.id, week: activeClient.week, day: addingSessionDay, type: newSessionForm.type, title: newSessionForm.title, goal: newSessionForm.goal, prescribed: true }).select().single()
+    if (!error && data) {
+      setPlanSessions([...planSessions, { ...data, exercises: [] }])
+      setAddingSessionDay(null)
+      setNewSessionForm({ type: 'strength', title: '', goal: '' })
+    }
   }
 
-  function updateRPE(dayIdx, sessionIdx, value) {
-    const p = JSON.parse(JSON.stringify(plan))
-    p[dayIdx].sessions[sessionIdx].rpe = value
-    setPlan(p)
+  async function deleteSession(sessionId) {
+    await supabase.from('exercises').delete().eq('session_id', sessionId)
+    await supabase.from('sessions').delete().eq('id', sessionId)
+    setPlanSessions(planSessions.filter(s => s.id !== sessionId))
   }
 
-  function updateSessionNotes(dayIdx, sessionIdx, value) {
-    const p = JSON.parse(JSON.stringify(plan))
-    p[dayIdx].sessions[sessionIdx].sessionNotes = value
-    setPlan(p)
+  async function addExercise(sessionId) {
+    if (!newExerciseForm.name.trim()) return
+    const session = planSessions.find(s => s.id === sessionId)
+    const { data, error } = await supabase.from('exercises').insert({ session_id: sessionId, name: newExerciseForm.name, sets: parseInt(newExerciseForm.sets) || 3, reps: parseInt(newExerciseForm.reps) || 10, tempo: newExerciseForm.tempo || null, notes: newExerciseForm.notes || null, superset: newExerciseForm.superset || null, order: session.exercises.length }).select().single()
+    if (!error && data) {
+      setPlanSessions(planSessions.map(s => s.id === sessionId ? { ...s, exercises: [...s.exercises, data] } : s))
+      setAddingExerciseSession(null)
+      setNewExerciseForm({ name: '', sets: 3, reps: 10, tempo: '', notes: '', superset: '' })
+    }
+  }
+
+  async function deleteExercise(sessionId, exerciseId) {
+    await supabase.from('exercises').delete().eq('id', exerciseId)
+    setPlanSessions(planSessions.map(s => s.id === sessionId ? { ...s, exercises: s.exercises.filter(e => e.id !== exerciseId) } : s))
   }
 
   async function sendMessage() {
     if (!msgInput.trim()) return
-    const { error } = await supabase.from('messages').insert({
-      client_id: activeClient.id,
-      from_coach: true,
-      content: msgInput,
-      read: true,
-    })
-    if (!error) {
-      setMessages([...messages, { from: 'coach', text: msgInput, time: 'just now' }])
-      setMsgInput('')
-    }
+    const { error } = await supabase.from('messages').insert({ client_id: activeClient.id, from_coach: true, content: msgInput, read: true })
+    if (!error) { setMessages([...messages, { from: 'coach', text: msgInput, time: 'just now' }]); setMsgInput('') }
   }
 
   async function signOut() {
@@ -116,11 +113,7 @@ export default function Home() {
     window.location.href = '/login'
   }
 
-  if (!authed) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-sm text-gray-400">Loading…</div>
-    </div>
-  )
+  if (!authed) return <div className="min-h-screen flex items-center justify-center"><div className="text-sm text-gray-400">Loading…</div></div>
 
   if (screen === 'dashboard') {
     return (
@@ -164,6 +157,8 @@ export default function Home() {
     )
   }
 
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <button onClick={() => setScreen('dashboard')} className="text-sm text-gray-500 mb-5 flex items-center gap-1 hover:text-gray-800">← All clients</button>
@@ -174,114 +169,173 @@ export default function Home() {
           <div className="text-sm text-gray-500 mt-0.5">{activeClient.meta}</div>
         </div>
       </div>
-      <div className="flex border-b border-gray-200 mb-6">
-        {['plan', 'diary', 'messages'].map(t => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === t ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>
-            {t === 'plan' ? 'Training plan' : t === 'diary' ? 'Food diary' : 'Messages'}
-          </button>
+
+      <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
+        {[['plan','Training plan'],['editplan','Edit plan'],['diary','Food diary'],['messages','Messages']].map(([key, label]) => (
+          <button key={key} onClick={() => setTab(key)} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${tab === key ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>{label}</button>
         ))}
       </div>
 
       {tab === 'plan' && (
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-xs font-medium text-gray-500">Week {activeClient.week}</div>
-            <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-              <button onClick={() => setViewMode('coach')} className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${viewMode === 'coach' ? 'bg-white text-gray-900' : 'text-gray-500'}`}>Coach view</button>
-              <button onClick={() => setViewMode('client')} className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${viewMode === 'client' ? 'bg-white text-gray-900' : 'text-gray-500'}`}>Client view</button>
-            </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            {plan.map((dayObj, dayIdx) => (
-              <div key={dayObj.day}>
-                {dayObj.sessions.length === 0 ? (
-                  <div className="flex gap-3 p-3.5 rounded-lg bg-gray-50 border border-gray-100">
-                    <div className="text-xs font-medium text-gray-400 w-8 pt-0.5">{dayObj.day}</div>
-                    <span className="text-sm text-gray-400">Rest or walk</span>
-                  </div>
-                ) : (
-                  <div className="border border-gray-200 rounded-xl overflow-hidden">
-                    <button onClick={() => setExpandedDay(expandedDay === dayIdx ? null : dayIdx)} className="w-full flex gap-3 p-3.5 bg-white hover:bg-gray-50 transition-colors text-left">
-                      <div className="text-xs font-medium text-gray-400 w-8 pt-0.5 flex-shrink-0">{dayObj.day}</div>
-                      <div className="flex-1 flex flex-col gap-1.5">
-                        {dayObj.sessions.map((s, si) => (
-                          <div key={si} className="flex gap-2 items-center">
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded flex-shrink-0 ${s.type === 'strength' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{s.type === 'strength' ? 'Strength' : 'Run'}</span>
-                            <span className="text-sm font-medium">{s.title}</span>
-                          </div>
-                        ))}
+          <div className="text-xs font-medium text-gray-500 mb-4">Week {activeClient.week} — prescribed plan</div>
+          {planLoading ? (
+            <div className="text-sm text-gray-400 text-center py-8">Loading plan…</div>
+          ) : planSessions.length === 0 ? (
+            <div className="text-sm text-gray-400 text-center py-8">No plan yet — go to Edit plan to create one</div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {days.map(day => {
+                const daySessions = planSessions.filter(s => s.day === day)
+                return (
+                  <div key={day}>
+                    {daySessions.length === 0 ? (
+                      <div className="flex gap-3 p-3.5 rounded-lg bg-gray-50 border border-gray-100">
+                        <div className="text-xs font-medium text-gray-400 w-8">{day}</div>
+                        <span className="text-sm text-gray-400">Rest</span>
                       </div>
-                      <span className="text-gray-400 text-xs">{expandedDay === dayIdx ? '▲' : '▼'}</span>
-                    </button>
-                    {expandedDay === dayIdx && (
-                      <div className="border-t border-gray-100">
-                        {dayObj.sessions.map((session, sessionIdx) => (
-                          <div key={sessionIdx} className={`p-4 ${sessionIdx > 0 ? 'border-t border-gray-100' : ''}`}>
-                            {dayObj.sessions.length > 1 && (
-                              <div className="flex items-center gap-2 mb-3">
-                                <span className={`text-xs font-medium px-2 py-0.5 rounded ${session.type === 'strength' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{session.type === 'strength' ? 'Strength' : 'Run'}</span>
-                                <span className="text-sm font-medium">{session.title}</span>
+                    ) : (
+                      <div className="border border-gray-200 rounded-xl overflow-hidden">
+                        <button onClick={() => setExpandedDay(expandedDay === day ? null : day)} className="w-full flex gap-3 p-3.5 bg-white hover:bg-gray-50 transition-colors text-left">
+                          <div className="text-xs font-medium text-gray-400 w-8 pt-0.5 flex-shrink-0">{day}</div>
+                          <div className="flex-1 flex flex-col gap-1.5">
+                            {daySessions.map((s, si) => (
+                              <div key={si} className="flex gap-2 items-center">
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded flex-shrink-0 ${s.type === 'strength' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{s.type === 'strength' ? 'Strength' : 'Run'}</span>
+                                <span className="text-sm font-medium">{s.title}</span>
                               </div>
-                            )}
-                            <div className="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-100">
-                              <div className="text-xs font-medium text-amber-700 mb-1">Session goal</div>
-                              <div className="text-sm text-amber-900">{session.goal}</div>
-                            </div>
-                            <div className="flex flex-col gap-3">
-                              {session.exercises.map((ex, exIdx) => (
-                                <div key={exIdx} className="bg-gray-50 rounded-lg p-3">
-                                  <div className="flex items-start justify-between gap-2 mb-1.5">
-                                    <span className="text-sm font-medium">{ex.name}</span>
-                                    <div className="flex gap-1.5 text-xs text-gray-500 flex-shrink-0">
-                                      <span className="bg-white border border-gray-200 px-2 py-0.5 rounded">{ex.sets} sets</span>
-                                      <span className="bg-white border border-gray-200 px-2 py-0.5 rounded">{ex.reps} reps</span>
-                                      {ex.tempo && <span className="bg-white border border-gray-200 px-2 py-0.5 rounded">{ex.tempo}</span>}
-                                    </div>
-                                  </div>
-                                  {ex.notes && <div className="text-xs text-gray-500 italic mb-2">{ex.notes}</div>}
-                                  {viewMode === 'client' && session.type === 'strength' && (
-                                    <div className="mt-2">
-                                      <div className="text-xs text-gray-400 mb-1.5">Log your weights (kg)</div>
-                                      <div className="flex gap-2 flex-wrap">
-                                        {ex.weights.map((w, setIdx) => (
-                                          <div key={setIdx} className="flex flex-col items-center gap-0.5">
-                                            <div className="text-xs text-gray-400">Set {setIdx + 1}</div>
-                                            <input type="number" value={w} onChange={e => updateWeight(dayIdx, sessionIdx, exIdx, setIdx, e.target.value)} placeholder="—" className="w-14 text-sm text-center border border-gray-200 rounded-md px-1 py-1.5 outline-none focus:border-blue-300 bg-white" />
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                            {viewMode === 'client' && (
-                              <div className="mt-4 pt-4 border-t border-gray-100">
-                                <div className="text-xs font-medium text-gray-600 mb-3">After your session</div>
-                                <div className="mb-3">
-                                  <div className="text-xs text-gray-500 mb-2">How hard was that? (RPE 1–10)</div>
-                                  <div className="flex gap-1.5 flex-wrap">
-                                    {[1,2,3,4,5,6,7,8,9,10].map(n => (
-                                      <button key={n} onClick={() => updateRPE(dayIdx, sessionIdx, n)} className={`w-9 h-9 rounded-lg text-sm font-medium border transition-colors ${session.rpe === n ? (n <= 4 ? 'bg-green-100 text-green-700 border-green-300' : n <= 7 ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-red-100 text-red-700 border-red-300') : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`}>{n}</button>
-                                    ))}
-                                  </div>
-                                  {session.rpe && <div className="text-xs text-gray-400 mt-1.5">{session.rpe <= 4 ? 'Easy — felt comfortable' : session.rpe <= 7 ? 'Moderate — good effort' : 'Hard — pushed it today'}</div>}
-                                </div>
-                                <div>
-                                  <div className="text-xs text-gray-500 mb-1.5">Notes for your coach</div>
-                                  <textarea value={session.sessionNotes} onChange={e => updateSessionNotes(dayIdx, sessionIdx, e.target.value)} placeholder="How did the session feel? Anything to flag..." rows={2} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-300 resize-none bg-white" />
-                                </div>
-                              </div>
-                            )}
+                            ))}
                           </div>
-                        ))}
+                          <span className="text-gray-400 text-xs">{expandedDay === day ? '▲' : '▼'}</span>
+                        </button>
+                        {expandedDay === day && (
+                          <div className="border-t border-gray-100">
+                            {daySessions.map((session, si) => (
+                              <div key={si} className={`p-4 ${si > 0 ? 'border-t border-gray-100' : ''}`}>
+                                {daySessions.length > 1 && (
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <span className={`text-xs font-medium px-2 py-0.5 rounded ${session.type === 'strength' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{session.type === 'strength' ? 'Strength' : 'Run'}</span>
+                                    <span className="text-sm font-medium">{session.title}</span>
+                                  </div>
+                                )}
+                                {session.goal && (
+                                  <div className="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-100">
+                                    <div className="text-xs font-medium text-amber-700 mb-1">Session goal</div>
+                                    <div className="text-sm text-amber-900">{session.goal}</div>
+                                  </div>
+                                )}
+                                <div className="flex flex-col gap-2">
+                                  {session.exercises.map((ex, exIdx) => (
+                                    <div key={exIdx} className="bg-gray-50 rounded-lg p-3">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div>
+                                          <span className="text-sm font-medium">{ex.name}</span>
+                                          {ex.superset && <span className="text-xs text-purple-600 ml-2 font-medium">SS {ex.superset}</span>}
+                                        </div>
+                                        <div className="flex gap-1.5 text-xs text-gray-500 flex-shrink-0">
+                                          <span className="bg-white border border-gray-200 px-2 py-0.5 rounded">{ex.sets} sets</span>
+                                          <span className="bg-white border border-gray-200 px-2 py-0.5 rounded">{ex.reps} reps</span>
+                                          {ex.tempo && <span className="bg-white border border-gray-200 px-2 py-0.5 rounded">{ex.tempo}</span>}
+                                        </div>
+                                      </div>
+                                      {ex.notes && <div className="text-xs text-gray-500 italic mt-1">{ex.notes}</div>}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'editplan' && (
+        <div>
+          <div className="text-xs font-medium text-gray-500 mb-4">Week {activeClient.week}</div>
+          {days.map(day => {
+            const daySessions = planSessions.filter(s => s.day === day)
+            return (
+              <div key={day} className="mb-5">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">{day}</span>
+                  {addingSessionDay !== day && (
+                    <button onClick={() => { setAddingSessionDay(day); setNewSessionForm({ type: 'strength', title: '', goal: '' }) }} className="text-xs text-blue-600 hover:text-blue-800">+ Add session</button>
+                  )}
+                </div>
+
+                {daySessions.map(session => (
+                  <div key={session.id} className="border border-gray-200 rounded-xl p-3 mb-2 bg-white">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded ${session.type === 'strength' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{session.type === 'strength' ? 'Strength' : 'Run'}</span>
+                        <span className="text-sm font-medium">{session.title}</span>
+                      </div>
+                      <button onClick={() => deleteSession(session.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+                    </div>
+                    {session.goal && <div className="text-xs text-gray-400 italic mb-2">{session.goal}</div>}
+                    <div className="flex flex-col gap-1 mb-2">
+                      {session.exercises.map(ex => (
+                        <div key={ex.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm font-medium">{ex.name}</span>
+                            {ex.superset && <span className="text-xs text-purple-600 ml-1.5 font-medium">SS {ex.superset}</span>}
+                            <span className="text-xs text-gray-400 ml-1.5">{ex.sets}×{ex.reps}</span>
+                            {ex.tempo && <span className="text-xs text-gray-400 ml-1.5">{ex.tempo}</span>}
+                            {ex.notes && <span className="text-xs text-gray-400 ml-1.5 italic">— {ex.notes}</span>}
+                          </div>
+                          <button onClick={() => deleteExercise(session.id, ex.id)} className="text-gray-400 hover:text-red-500 ml-2 text-lg leading-none">×</button>
+                        </div>
+                      ))}
+                    </div>
+                    {addingExerciseSession === session.id ? (
+                      <div className="bg-gray-50 rounded-lg p-3 flex flex-col gap-2 mt-2">
+                        <input value={newExerciseForm.name} onChange={e => setNewExerciseForm({...newExerciseForm, name: e.target.value})} placeholder="Exercise name" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none bg-white" />
+                        <div className="grid grid-cols-3 gap-2">
+                          <div><div className="text-xs text-gray-500 mb-1">Sets</div><input type="number" value={newExerciseForm.sets} onChange={e => setNewExerciseForm({...newExerciseForm, sets: e.target.value})} className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 outline-none text-center bg-white" /></div>
+                          <div><div className="text-xs text-gray-500 mb-1">Reps</div><input type="number" value={newExerciseForm.reps} onChange={e => setNewExerciseForm({...newExerciseForm, reps: e.target.value})} className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 outline-none text-center bg-white" /></div>
+                          <div><div className="text-xs text-gray-500 mb-1">Tempo</div><input value={newExerciseForm.tempo} onChange={e => setNewExerciseForm({...newExerciseForm, tempo: e.target.value})} placeholder="3-1-1" className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 outline-none text-center bg-white" /></div>
+                        </div>
+                        <input value={newExerciseForm.notes} onChange={e => setNewExerciseForm({...newExerciseForm, notes: e.target.value})} placeholder="Coach notes (optional)" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none bg-white" />
+                        <input value={newExerciseForm.superset} onChange={e => setNewExerciseForm({...newExerciseForm, superset: e.target.value})} placeholder="Superset group e.g. A or B (leave blank if none)" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none bg-white" />
+                        <div className="flex gap-2">
+                          <button onClick={() => addExercise(session.id)} className="flex-1 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg hover:bg-gray-700">Add exercise</button>
+                          <button onClick={() => setAddingExerciseSession(null)} className="px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg bg-white">Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={() => { setAddingExerciseSession(session.id); setNewExerciseForm({ name: '', sets: 3, reps: 10, tempo: '', notes: '', superset: '' }) }} className="text-xs text-gray-500 hover:text-gray-700 mt-1">+ Add exercise</button>
+                    )}
+                  </div>
+                ))}
+
+                {addingSessionDay === day && (
+                  <div className="border border-blue-100 rounded-xl p-3 mb-2 bg-blue-50">
+                    <div className="flex gap-2 mb-2">
+                      <button onClick={() => setNewSessionForm({...newSessionForm, type: 'strength'})} className={`flex-1 py-1.5 text-xs font-medium rounded-lg border transition-colors ${newSessionForm.type === 'strength' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-gray-500 border-gray-200'}`}>Strength</button>
+                      <button onClick={() => setNewSessionForm({...newSessionForm, type: 'run'})} className={`flex-1 py-1.5 text-xs font-medium rounded-lg border transition-colors ${newSessionForm.type === 'run' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-white text-gray-500 border-gray-200'}`}>Run</button>
+                    </div>
+                    <input value={newSessionForm.title} onChange={e => setNewSessionForm({...newSessionForm, title: e.target.value})} placeholder="Session title e.g. Lower body" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none mb-2 bg-white" />
+                    <input value={newSessionForm.goal} onChange={e => setNewSessionForm({...newSessionForm, goal: e.target.value})} placeholder="Session goal (optional)" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none mb-2 bg-white" />
+                    <div className="flex gap-2">
+                      <button onClick={addSession} className="flex-1 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg hover:bg-gray-700">Add session</button>
+                      <button onClick={() => setAddingSessionDay(null)} className="px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg bg-white">Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {daySessions.length === 0 && addingSessionDay !== day && (
+                  <div className="text-xs text-gray-300 py-1">Rest day</div>
                 )}
               </div>
-            ))}
-          </div>
+            )
+          })}
         </div>
       )}
 
