@@ -26,6 +26,8 @@ export default function Home() {
   const [diaryEntries, setDiaryEntries] = useState([])
   const [messages, setMessages] = useState([])
   const [msgInput, setMsgInput] = useState('')
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [diariesToday, setDiariesToday] = useState(0)
 
   const router = useRouter()
   const colours = ['bg-blue-100 text-blue-700', 'bg-green-100 text-green-700', 'bg-pink-100 text-pink-700', 'bg-purple-100 text-purple-700', 'bg-amber-100 text-amber-700']
@@ -44,10 +46,16 @@ export default function Home() {
               colour: colours[i % colours.length],
               meta: `Week ${c.week} of 12 · ${c.programme}`,
               status: 'On track',
-              messages: 0,
             })))
           }
           setLoading(false)
+        })
+        const today = new Date().toISOString().split('T')[0]
+        supabase.from('messages').select('id', { count: 'exact' }).eq('from_coach', false).eq('read', false).then(({ count }) => {
+          setUnreadCount(count || 0)
+        })
+        supabase.from('diary_entries').select('id', { count: 'exact' }).eq('date', today).then(({ count }) => {
+          setDiariesToday(count || 0)
         })
       }
     })
@@ -61,7 +69,14 @@ export default function Home() {
     const { data: diary } = await supabase.from('diary_entries').select('*').eq('client_id', client.id).order('date', { ascending: false })
     if (diary) setDiaryEntries(diary)
     const { data: msgs } = await supabase.from('messages').select('*').eq('client_id', client.id).order('created_at', { ascending: true })
-    if (msgs) setMessages(msgs.map(m => ({ from: m.from_coach ? 'coach' : 'client', text: m.content, time: new Date(m.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) })))
+    if (msgs) {
+      setMessages(msgs.map(m => ({ from: m.from_coach ? 'coach' : 'client', text: m.content, time: new Date(m.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) })))
+      const unreadIds = msgs.filter(m => !m.from_coach && !m.read).map(m => m.id)
+      if (unreadIds.length > 0) {
+        await supabase.from('messages').update({ read: true }).in('id', unreadIds)
+        setUnreadCount(prev => Math.max(0, prev - unreadIds.length))
+      }
+    }
   }
 
   function updateWeight(dayIdx, sessionIdx, exIdx, setIdx, value) {
@@ -88,6 +103,7 @@ export default function Home() {
       client_id: activeClient.id,
       from_coach: true,
       content: msgInput,
+      read: true,
     })
     if (!error) {
       setMessages([...messages, { from: 'coach', text: msgInput, time: 'just now' }])
@@ -117,7 +133,7 @@ export default function Home() {
           </div>
         </div>
         <div className="grid grid-cols-3 gap-3 mb-8">
-          {[['Active clients', clients.length.toString()], ['Diaries today', '0'], ['Unread messages', '0']].map(([label, value]) => (
+          {[['Active clients', clients.length.toString()], ['Diaries today', diariesToday.toString()], ['Unread messages', unreadCount.toString()]].map(([label, value]) => (
             <div key={label} className="bg-gray-50 rounded-lg p-4">
               <div className="text-xs text-gray-500 mb-1">{label}</div>
               <div className="text-2xl font-medium">{value}</div>
