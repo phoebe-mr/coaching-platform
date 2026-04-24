@@ -24,11 +24,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [authed, setAuthed] = useState(false)
   const [diaryEntries, setDiaryEntries] = useState([])
-  const [messages, setMessages] = useState([
-    { from: 'client', text: "Hi Phoebe, my knees were aching during the split squats — should I modify?", time: 'Thu 10 April, 7:42pm' },
-    { from: 'coach', text: "Yes — try a reverse lunge instead. Let me know how it feels!", time: 'Thu 10 April, 8:15pm' },
-    { from: 'client', text: "Just finished Monday's session — felt really strong today!", time: 'Mon 14 April, 11:30am' },
-  ])
+  const [messages, setMessages] = useState([])
   const [msgInput, setMsgInput] = useState('')
 
   const router = useRouter()
@@ -62,12 +58,10 @@ export default function Home() {
     setScreen('client')
     setTab('plan')
     setExpandedDay(null)
-    const { data, error } = await supabase
-      .from('diary_entries')
-      .select('*')
-      .eq('client_id', client.id)
-      .order('date', { ascending: false })
-    if (!error) setDiaryEntries(data)
+    const { data: diary } = await supabase.from('diary_entries').select('*').eq('client_id', client.id).order('date', { ascending: false })
+    if (diary) setDiaryEntries(diary)
+    const { data: msgs } = await supabase.from('messages').select('*').eq('client_id', client.id).order('created_at', { ascending: true })
+    if (msgs) setMessages(msgs.map(m => ({ from: m.from_coach ? 'coach' : 'client', text: m.content, time: new Date(m.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) })))
   }
 
   function updateWeight(dayIdx, sessionIdx, exIdx, setIdx, value) {
@@ -88,10 +82,17 @@ export default function Home() {
     setPlan(p)
   }
 
-  function sendMessage() {
+  async function sendMessage() {
     if (!msgInput.trim()) return
-    setMessages([...messages, { from: 'coach', text: msgInput, time: 'just now' }])
-    setMsgInput('')
+    const { error } = await supabase.from('messages').insert({
+      client_id: activeClient.id,
+      from_coach: true,
+      content: msgInput,
+    })
+    if (!error) {
+      setMessages([...messages, { from: 'coach', text: msgInput, time: 'just now' }])
+      setMsgInput('')
+    }
   }
 
   async function signOut() {
@@ -235,11 +236,6 @@ export default function Home() {
                                       </div>
                                     </div>
                                   )}
-                                  {viewMode === 'coach' && session.exercises[exIdx].weights.some(w => w !== '') && (
-                                    <div className="mt-2 text-xs text-gray-400">
-                                      Logged: {ex.weights.map((w, j) => w ? `Set ${j+1}: ${w}kg` : null).filter(Boolean).join(' · ')}
-                                    </div>
-                                  )}
                                 </div>
                               ))}
                             </div>
@@ -259,12 +255,6 @@ export default function Home() {
                                   <div className="text-xs text-gray-500 mb-1.5">Notes for your coach</div>
                                   <textarea value={session.sessionNotes} onChange={e => updateSessionNotes(dayIdx, sessionIdx, e.target.value)} placeholder="How did the session feel? Anything to flag..." rows={2} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-300 resize-none bg-white" />
                                 </div>
-                              </div>
-                            )}
-                            {viewMode === 'coach' && (session.rpe || session.sessionNotes) && (
-                              <div className="mt-3 pt-3 border-t border-gray-100">
-                                {session.rpe && <div className="text-xs mb-1"><span className="text-gray-400">Client RPE: </span><span className={`font-medium ${session.rpe <= 4 ? 'text-green-600' : session.rpe <= 7 ? 'text-amber-600' : 'text-red-600'}`}>{session.rpe}/10</span></div>}
-                                {session.sessionNotes && <div className="text-xs text-gray-500 italic">"{session.sessionNotes}"</div>}
                               </div>
                             )}
                           </div>
@@ -310,7 +300,9 @@ export default function Home() {
       {tab === 'messages' && (
         <div>
           <div className="flex flex-col gap-3 mb-4">
-            {messages.map((m, i) => (
+            {messages.length === 0 ? (
+              <div className="text-sm text-gray-400 text-center py-8">No messages yet</div>
+            ) : messages.map((m, i) => (
               <div key={i} className={`flex flex-col ${m.from === 'coach' ? 'items-end' : 'items-start'}`}>
                 <div className={`max-w-xs px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${m.from === 'coach' ? 'bg-blue-100 text-blue-900 rounded-br-sm' : 'bg-gray-100 text-gray-800 rounded-bl-sm'}`}>{m.text}</div>
                 <div className="text-xs text-gray-400 mt-1">{m.from === 'coach' ? 'You' : activeClient.name.split(' ')[0]} · {m.time}</div>

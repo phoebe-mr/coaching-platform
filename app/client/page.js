@@ -71,9 +71,7 @@ export default function ClientPage() {
   const [expandedDay, setExpandedDay] = useState(null)
   const [authed, setAuthed] = useState(false)
   const [clientData, setClientData] = useState(null)
-  const [messages, setMessages] = useState([
-    { from: 'coach', text: "Hi! Great work this week. Keep it up!", time: 'Mon 14 April, 9:00am' },
-  ])
+  const [messages, setMessages] = useState([])
   const [msgInput, setMsgInput] = useState('')
   const [diaryForm, setDiaryForm] = useState({ breakfast: '', lunch: '', dinner: '', snacks: '', protein: '', carbs: '', fat: '', calories: '', notes: '' })
   const [diarySubmitted, setDiarySubmitted] = useState(false)
@@ -85,6 +83,9 @@ export default function ClientPage() {
         if (error || !data) { window.location.href = '/login'; return }
         setClientData(data)
         setAuthed(true)
+        supabase.from('messages').select('*').eq('client_id', data.id).order('created_at', { ascending: true }).then(({ data: msgs }) => {
+          if (msgs && msgs.length > 0) setMessages(msgs.map(m => ({ from: m.from_coach ? 'coach' : 'client', text: m.content, time: new Date(m.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) })))
+        })
       })
     })
   }, [])
@@ -123,21 +124,16 @@ export default function ClientPage() {
   async function saveSession(dayIdx, sessionIdx) {
     const session = plan[dayIdx].sessions[sessionIdx]
     const dayObj = plan[dayIdx]
-
     const { data: sessionData, error: sessionError } = await supabase
       .from('sessions')
       .insert({ client_id: clientData.id, week: clientData.week, day: dayObj.day, type: session.type, title: session.title, goal: session.goal })
       .select().single()
-
     if (sessionError) { console.error('Error saving session:', sessionError); return }
-
     const { data: exerciseRows, error: exError } = await supabase
       .from('exercises')
       .insert(session.exercises.map((ex, i) => ({ session_id: sessionData.id, name: ex.name, sets: ex.sets, reps: ex.reps, tempo: ex.tempo, notes: ex.notes, order: i })))
       .select()
-
     if (exError) { console.error('Error saving exercises:', exError); return }
-
     const weightLogs = []
     session.exercises.forEach((ex, exIdx) => {
       ex.weights.forEach((w, setIdx) => {
@@ -145,18 +141,23 @@ export default function ClientPage() {
       })
     })
     if (weightLogs.length > 0) await supabase.from('exercise_logs').insert(weightLogs)
-
     await supabase.from('session_logs').insert({ session_id: sessionData.id, client_id: clientData.id, rpe: session.rpe || null, notes: session.sessionNotes || null })
-
     const p = JSON.parse(JSON.stringify(plan))
     p[dayIdx].sessions[sessionIdx].saved = true
     setPlan(p)
   }
 
-  function sendMessage() {
+  async function sendMessage() {
     if (!msgInput.trim()) return
-    setMessages([...messages, { from: 'client', text: msgInput, time: 'just now' }])
-    setMsgInput('')
+    const { error } = await supabase.from('messages').insert({
+      client_id: clientData.id,
+      from_coach: false,
+      content: msgInput,
+    })
+    if (!error) {
+      setMessages([...messages, { from: 'client', text: msgInput, time: 'just now' }])
+      setMsgInput('')
+    }
   }
 
   async function signOut() {
@@ -233,7 +234,6 @@ export default function ClientPage() {
                       </div>
                       <span className="text-gray-400 text-xs">{expandedDay === dayIdx ? '▲' : '▼'}</span>
                     </button>
-
                     {expandedDay === dayIdx && (
                       <div className="border-t border-gray-100">
                         {dayObj.sessions.map((session, sessionIdx) => (
@@ -244,16 +244,13 @@ export default function ClientPage() {
                                 <span className="text-sm font-medium">{session.title}</span>
                               </div>
                             )}
-
                             <div className="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-100">
                               <div className="text-xs font-medium text-amber-700 mb-1">Session goal</div>
                               <div className="text-sm text-amber-900">{session.goal}</div>
                             </div>
-
                             {!session.started && !session.saved && (
                               <button onClick={() => startSession(dayIdx, sessionIdx)} className="w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors mb-3">Start session</button>
                             )}
-
                             {(session.started || session.saved) && (
                               <div className="flex flex-col gap-3">
                                 {groupExercises(session.exercises).map((group, groupIdx) => (
@@ -262,7 +259,7 @@ export default function ClientPage() {
                                       <div className="border border-purple-100 rounded-lg overflow-hidden">
                                         <div className="bg-purple-50 px-3 py-1.5 flex items-center gap-2">
                                           <span className="text-xs font-medium text-purple-600">Superset {group.label}</span>
-                                          <span className="text-xs text-purple-400">— complete both exercises back to back</span>
+                                          <span className="text-xs text-purple-400">— complete both back to back</span>
                                         </div>
                                         <div className="divide-y divide-gray-100">
                                           {group.items.map(({ ex, idx }) => (
@@ -331,7 +328,6 @@ export default function ClientPage() {
                                     )}
                                   </div>
                                 ))}
-
                                 <div className="mt-2 pt-4 border-t border-gray-100">
                                   <div className="text-xs font-medium text-gray-600 mb-3">Finish session</div>
                                   <div className="mb-3">
@@ -406,7 +402,9 @@ export default function ClientPage() {
       {tab === 'messages' && (
         <div>
           <div className="flex flex-col gap-3 mb-4">
-            {messages.map((m, i) => (
+            {messages.length === 0 ? (
+              <div className="text-sm text-gray-400 text-center py-8">No messages yet</div>
+            ) : messages.map((m, i) => (
               <div key={i} className={`flex flex-col ${m.from === 'client' ? 'items-end' : 'items-start'}`}>
                 <div className={`max-w-xs px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${m.from === 'client' ? 'bg-blue-100 text-blue-900 rounded-br-sm' : 'bg-gray-100 text-gray-800 rounded-bl-sm'}`}>{m.text}</div>
                 <div className="text-xs text-gray-400 mt-1">{m.from === 'client' ? 'You' : 'Phoebe'} · {m.time}</div>
