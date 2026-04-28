@@ -62,6 +62,8 @@ export default function ClientPage() {
   const [msgInput, setMsgInput] = useState('')
   const [diaryForm, setDiaryForm] = useState({ breakfast: '', lunch: '', dinner: '', snacks: '', protein: '', carbs: '', fat: '', calories: '', notes: '' })
   const [diarySubmitted, setDiarySubmitted] = useState(false)
+  const [sessionHistory, setSessionHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -75,16 +77,37 @@ export default function ClientPage() {
         })
         const { data: dbSessions } = await supabase.from('sessions').select('*').eq('client_id', data.id).eq('prescribed', true).order('id')
         if (dbSessions && dbSessions.length > 0) {
-          const sessionIds = dbSessions.map(s => s.id)
-          const { data: dbExercises } = await supabase.from('exercises').select('*').in('session_id', sessionIds).order('order')
+          const { data: dbExercises } = await supabase.from('exercises').select('*').in('session_id', dbSessions.map(s => s.id)).order('order')
           setPlan(buildPlanFromDB(dbSessions, dbExercises || []))
         } else {
           setPlan(buildPlanFromDB([], []))
         }
         setPlanLoaded(true)
+        loadHistory(data.id)
       })
     })
   }, [])
+
+  async function loadHistory(clientId) {
+    setHistoryLoading(true)
+    const { data: sessions } = await supabase.from('sessions').select('*').eq('client_id', clientId).eq('prescribed', false).order('id', { ascending: false })
+    if (sessions && sessions.length > 0) {
+      const { data: exercises } = await supabase.from('exercises').select('*').in('session_id', sessions.map(s => s.id)).order('order')
+      const { data: logs } = await supabase.from('session_logs').select('*').in('session_id', sessions.map(s => s.id))
+      const { data: weightLogs } = await supabase.from('exercise_logs').select('*').in('exercise_id', exercises?.map(e => e.id) || [])
+      setSessionHistory(sessions.map(s => ({
+        ...s,
+        exercises: (exercises?.filter(e => e.session_id === s.id) || []).map(ex => ({
+          ...ex,
+          weights: weightLogs?.filter(w => w.exercise_id === ex.id).sort((a, b) => a.set_number - b.set_number) || []
+        })),
+        log: logs?.find(l => l.session_id === s.id) || null
+      })))
+    } else {
+      setSessionHistory([])
+    }
+    setHistoryLoading(false)
+  }
 
   function updateWeight(dayIdx, sessionIdx, exIdx, setIdx, value) {
     const p = JSON.parse(JSON.stringify(plan))
@@ -135,6 +158,7 @@ export default function ClientPage() {
     const p = JSON.parse(JSON.stringify(plan))
     p[dayIdx].sessions[sessionIdx].saved = true
     setPlan(p)
+    loadHistory(clientData.id)
   }
 
   async function sendMessage() {
@@ -171,11 +195,9 @@ export default function ClientPage() {
         </div>
       </div>
 
-      <div className="flex border-b border-gray-200 mb-6">
-        {['plan', 'diary', 'messages'].map(t => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === t ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>
-            {t === 'plan' ? 'My plan' : t === 'diary' ? 'Food diary' : 'Messages'}
-          </button>
+      <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
+        {[['plan','My plan'],['history','My history'],['diary','Food diary'],['messages','Messages']].map(([key, label]) => (
+          <button key={key} onClick={() => setTab(key)} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${tab === key ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>{label}</button>
         ))}
       </div>
 
@@ -335,6 +357,59 @@ export default function ClientPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'history' && (
+        <div>
+          <div className="text-xs font-medium text-gray-500 mb-4">Your completed sessions</div>
+          {historyLoading ? (
+            <div className="text-sm text-gray-400 text-center py-8">Loading history…</div>
+          ) : sessionHistory.length === 0 ? (
+            <div className="text-sm text-gray-400 text-center py-8">No completed sessions yet — complete a session to see it here!</div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {sessionHistory.map((session, i) => (
+                <div key={i} className="bg-white border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded ${session.type === 'strength' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{session.type === 'strength' ? 'Strength' : 'Run'}</span>
+                      <span className="text-sm font-medium">{session.title}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">{session.day}</span>
+                      {session.log?.rpe && (
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded ${session.log.rpe <= 4 ? 'bg-green-100 text-green-700' : session.log.rpe <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>RPE {session.log.rpe}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {session.exercises.map((ex, exIdx) => (
+                      <div key={exIdx} className="bg-gray-50 rounded-lg px-3 py-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">{ex.name}</span>
+                          <span className="text-xs text-gray-400">{ex.sets}×{ex.reps}</span>
+                        </div>
+                        {ex.weights.length > 0 && (
+                          <div className="flex gap-2 mt-1.5 flex-wrap">
+                            {ex.weights.map((w, wi) => (
+                              <div key={wi} className="text-xs bg-white border border-gray-200 rounded px-2 py-0.5">
+                                <span className="text-gray-400">S{w.set_number} </span>
+                                <span className="font-medium">{w.weight}kg</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {session.log?.notes && (
+                    <div className="text-xs text-gray-500 italic mt-3 pt-3 border-t border-gray-100">"{session.log.notes}"</div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>

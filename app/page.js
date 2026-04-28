@@ -21,8 +21,15 @@ export default function Home() {
   const [newSessionForm, setNewSessionForm] = useState({ type: 'strength', title: '', goal: '' })
   const [addingExerciseSession, setAddingExerciseSession] = useState(null)
   const [newExerciseForm, setNewExerciseForm] = useState({ name: '', sets: 3, reps: 10, tempo: '', notes: '', superset: '' })
+  const [showAddClient, setShowAddClient] = useState(false)
+  const [newClientForm, setNewClientForm] = useState({ name: '', email: '', password: '', programme: '', week: 1 })
+  const [addingClient, setAddingClient] = useState(false)
+  const [addClientError, setAddClientError] = useState('')
+  const [sessionHistory, setSessionHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const colours = ['bg-blue-100 text-blue-700', 'bg-green-100 text-green-700', 'bg-pink-100 text-pink-700', 'bg-purple-100 text-purple-700', 'bg-amber-100 text-amber-700']
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -38,17 +45,64 @@ export default function Home() {
     })
   }, [])
 
+  async function addClient() {
+    if (!newClientForm.name.trim() || !newClientForm.email.trim() || !newClientForm.password.trim()) {
+      setAddClientError('Name, email and password are required')
+      return
+    }
+    setAddingClient(true)
+    setAddClientError('')
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: newClientForm.email,
+      password: newClientForm.password,
+    })
+    if (authError) { setAddClientError(authError.message); setAddingClient(false); return }
+    const { data: clientData, error: clientError } = await supabase.from('clients').insert({
+      name: newClientForm.name,
+      email: newClientForm.email,
+      programme: newClientForm.programme || 'General programme',
+      week: parseInt(newClientForm.week) || 1,
+      user_id: authData.user.id,
+    }).select().single()
+    if (clientError) { setAddClientError(clientError.message); setAddingClient(false); return }
+    const newClient = { ...clientData, initials: clientData.name.split(' ').map(n => n[0]).join(''), colour: colours[clients.length % colours.length], meta: `Week ${clientData.week} of 12 · ${clientData.programme}`, status: 'On track' }
+    setClients([...clients, newClient])
+    setShowAddClient(false)
+    setNewClientForm({ name: '', email: '', password: '', programme: '', week: 1 })
+    setAddingClient(false)
+  }
+
   async function loadPlan(clientId) {
     setPlanLoading(true)
     const { data: sessions } = await supabase.from('sessions').select('*').eq('client_id', clientId).eq('prescribed', true).order('id')
     if (sessions && sessions.length > 0) {
-      const sessionIds = sessions.map(s => s.id)
-      const { data: exercises } = await supabase.from('exercises').select('*').in('session_id', sessionIds).order('order')
+      const { data: exercises } = await supabase.from('exercises').select('*').in('session_id', sessions.map(s => s.id)).order('order')
       setPlanSessions(sessions.map(s => ({ ...s, exercises: exercises?.filter(e => e.session_id === s.id) || [] })))
     } else {
       setPlanSessions([])
     }
     setPlanLoading(false)
+  }
+
+  async function loadSessionHistory(clientId) {
+    setHistoryLoading(true)
+    const { data: sessions } = await supabase.from('sessions').select('*').eq('client_id', clientId).eq('prescribed', false).order('id', { ascending: false })
+    if (sessions && sessions.length > 0) {
+      const { data: exercises } = await supabase.from('exercises').select('*').in('session_id', sessions.map(s => s.id)).order('order')
+      const { data: logs } = await supabase.from('session_logs').select('*').in('session_id', sessions.map(s => s.id))
+      const { data: weightLogs } = await supabase.from('exercise_logs').select('*').in('exercise_id', exercises?.map(e => e.id) || [])
+      setSessionHistory(sessions.map(s => ({
+        ...s,
+        exercises: (exercises?.filter(e => e.session_id === s.id) || []).map(ex => ({
+          ...ex,
+          weights: weightLogs?.filter(w => w.exercise_id === ex.id).sort((a, b) => a.set_number - b.set_number) || []
+        })),
+        log: logs?.find(l => l.session_id === s.id) || null
+      })))
+    } else {
+      setSessionHistory([])
+    }
+    setHistoryLoading(false)
   }
 
   async function openClient(client) {
@@ -57,6 +111,7 @@ export default function Home() {
     setTab('plan')
     setExpandedDay(null)
     loadPlan(client.id)
+    loadSessionHistory(client.id)
     const { data: diary } = await supabase.from('diary_entries').select('*').eq('client_id', client.id).order('date', { ascending: false })
     if (diary) setDiaryEntries(diary)
     const { data: msgs } = await supabase.from('messages').select('*').eq('client_id', client.id).order('created_at', { ascending: true })
@@ -125,6 +180,7 @@ export default function Home() {
             <button onClick={signOut} className="text-xs text-gray-400 hover:text-gray-600">Sign out</button>
           </div>
         </div>
+
         <div className="grid grid-cols-3 gap-3 mb-8">
           {[['Active clients', clients.length.toString()], ['Diaries today', diariesToday.toString()], ['Unread messages', unreadCount.toString()]].map(([label, value]) => (
             <div key={label} className="bg-gray-50 rounded-lg p-4">
@@ -133,11 +189,37 @@ export default function Home() {
             </div>
           ))}
         </div>
-        <div className="text-xs font-medium text-gray-500 mb-3">Your clients</div>
+
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-medium text-gray-500">Your clients</div>
+          <button onClick={() => setShowAddClient(!showAddClient)} className="text-xs font-medium text-blue-600 hover:text-blue-800">+ Add client</button>
+        </div>
+
+        {showAddClient && (
+          <div className="border border-blue-100 rounded-xl p-4 mb-4 bg-blue-50">
+            <div className="text-xs font-medium text-gray-600 mb-3">New client</div>
+            <div className="flex flex-col gap-2">
+              <input value={newClientForm.name} onChange={e => setNewClientForm({...newClientForm, name: e.target.value})} placeholder="Full name" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white" />
+              <input type="email" value={newClientForm.email} onChange={e => setNewClientForm({...newClientForm, email: e.target.value})} placeholder="Email address" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white" />
+              <input type="password" value={newClientForm.password} onChange={e => setNewClientForm({...newClientForm, password: e.target.value})} placeholder="Temporary password" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white" />
+              <input value={newClientForm.programme} onChange={e => setNewClientForm({...newClientForm, programme: e.target.value})} placeholder="Programme name e.g. Perimenopause programme" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white" />
+              <div>
+                <div className="text-xs text-gray-500 mb-1">Starting week</div>
+                <input type="number" value={newClientForm.week} onChange={e => setNewClientForm({...newClientForm, week: e.target.value})} min="1" max="52" className="w-20 text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none text-center bg-white" />
+              </div>
+              {addClientError && <div className="text-xs text-red-500">{addClientError}</div>}
+              <div className="flex gap-2 mt-1">
+                <button onClick={addClient} disabled={addingClient} className="flex-1 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 disabled:opacity-50">{addingClient ? 'Adding…' : 'Add client'}</button>
+                <button onClick={() => { setShowAddClient(false); setAddClientError('') }} className="px-4 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg bg-white">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="text-sm text-gray-400 py-8 text-center">Loading clients…</div>
         ) : clients.length === 0 ? (
-          <div className="text-sm text-gray-400 py-8 text-center">No clients yet</div>
+          <div className="text-sm text-gray-400 py-8 text-center">No clients yet — add one above</div>
         ) : (
           <div className="flex flex-col gap-2">
             {clients.map(c => (
@@ -157,8 +239,6 @@ export default function Home() {
     )
   }
 
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <button onClick={() => setScreen('dashboard')} className="text-sm text-gray-500 mb-5 flex items-center gap-1 hover:text-gray-800">← All clients</button>
@@ -171,7 +251,7 @@ export default function Home() {
       </div>
 
       <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
-        {[['plan','Training plan'],['editplan','Edit plan'],['diary','Food diary'],['messages','Messages']].map(([key, label]) => (
+        {[['plan','Training plan'],['editplan','Edit plan'],['history','Session history'],['diary','Food diary'],['messages','Messages']].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${tab === key ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>{label}</button>
         ))}
       </div>
@@ -269,7 +349,6 @@ export default function Home() {
                     <button onClick={() => { setAddingSessionDay(day); setNewSessionForm({ type: 'strength', title: '', goal: '' }) }} className="text-xs text-blue-600 hover:text-blue-800">+ Add session</button>
                   )}
                 </div>
-
                 {daySessions.map(session => (
                   <div key={session.id} className="border border-gray-200 rounded-xl p-3 mb-2 bg-white">
                     <div className="flex items-center justify-between mb-2">
@@ -314,7 +393,6 @@ export default function Home() {
                     )}
                   </div>
                 ))}
-
                 {addingSessionDay === day && (
                   <div className="border border-blue-100 rounded-xl p-3 mb-2 bg-blue-50">
                     <div className="flex gap-2 mb-2">
@@ -329,13 +407,65 @@ export default function Home() {
                     </div>
                   </div>
                 )}
-
                 {daySessions.length === 0 && addingSessionDay !== day && (
                   <div className="text-xs text-gray-300 py-1">Rest day</div>
                 )}
               </div>
             )
           })}
+        </div>
+      )}
+
+      {tab === 'history' && (
+        <div>
+          <div className="text-xs font-medium text-gray-500 mb-4">Completed sessions</div>
+          {historyLoading ? (
+            <div className="text-sm text-gray-400 text-center py-8">Loading history…</div>
+          ) : sessionHistory.length === 0 ? (
+            <div className="text-sm text-gray-400 text-center py-8">No completed sessions yet</div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {sessionHistory.map((session, i) => (
+                <div key={i} className="bg-white border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded ${session.type === 'strength' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{session.type === 'strength' ? 'Strength' : 'Run'}</span>
+                      <span className="text-sm font-medium">{session.title}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">{session.day}</span>
+                      {session.log?.rpe && (
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded ${session.log.rpe <= 4 ? 'bg-green-100 text-green-700' : session.log.rpe <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>RPE {session.log.rpe}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {session.exercises.map((ex, exIdx) => (
+                      <div key={exIdx} className="bg-gray-50 rounded-lg px-3 py-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">{ex.name}</span>
+                          <span className="text-xs text-gray-400">{ex.sets}×{ex.reps}</span>
+                        </div>
+                        {ex.weights.length > 0 && (
+                          <div className="flex gap-2 mt-1.5 flex-wrap">
+                            {ex.weights.map((w, wi) => (
+                              <div key={wi} className="text-xs bg-white border border-gray-200 rounded px-2 py-0.5">
+                                <span className="text-gray-400">S{w.set_number} </span>
+                                <span className="font-medium">{w.weight}kg</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {session.log?.notes && (
+                    <div className="text-xs text-gray-500 italic mt-3 pt-3 border-t border-gray-100">"{session.log.notes}"</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
