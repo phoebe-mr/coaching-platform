@@ -162,10 +162,23 @@ export default function ClientPage() {
   }
 
   async function sendMessage() {
-    if (!msgInput.trim()) return
-    const { error } = await supabase.from('messages').insert({ client_id: clientData.id, from_coach: false, content: msgInput })
-    if (!error) { setMessages([...messages, { from: 'client', text: msgInput, time: 'just now' }]); setMsgInput('') }
+  if (!msgInput.trim()) return
+  const { error } = await supabase.from('messages').insert({ client_id: clientData.id, from_coach: false, content: msgInput })
+  if (!error) {
+    setMessages([...messages, { from: 'client', text: msgInput, time: 'just now' }])
+    setMsgInput('')
+    console.log('Calling edge function...')
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/notify-message`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
+      },
+      body: JSON.stringify({ record: { content: msgInput, from_coach: false, client_email: clientData.email } })
+    })
+    console.log('Edge function response:', response.status)
   }
+ }
 
   async function signOut() {
     await supabase.auth.signOut()

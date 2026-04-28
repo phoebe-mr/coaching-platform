@@ -27,10 +27,10 @@ serve(async (req) => {
     })
 
     const data = await res.json()
-    console.log('Resend response:', data)
+    console.log('Resend response:', JSON.stringify(data))
     return new Response(JSON.stringify(data), { status: 200 })
   } catch (err) {
-    console.error('Error:', err)
-    return new Response('Error', { status: 500 })
+    console.error('Error:', String(err))
+    return new Response(String(err), { status: 500 })
   }
 })
