@@ -158,10 +158,21 @@ export default function Home() {
   }
 
   async function sendMessage() {
-    if (!msgInput.trim()) return
-    const { error } = await supabase.from('messages').insert({ client_id: activeClient.id, from_coach: true, content: msgInput, read: true })
-    if (!error) { setMessages([...messages, { from: 'coach', text: msgInput, time: 'just now' }]); setMsgInput('') }
+  if (!msgInput.trim()) return
+  const { error } = await supabase.from('messages').insert({ client_id: activeClient.id, from_coach: true, content: msgInput, read: true })
+  if (!error) {
+    setMessages([...messages, { from: 'coach', text: msgInput, time: 'just now' }])
+    setMsgInput('')
+    await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/notify-message`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
+      },
+      body: JSON.stringify({ record: { content: msgInput, from_coach: true, client_email: activeClient.email } })
+    })
   }
+ }
 
   async function signOut() {
     await supabase.auth.signOut()
