@@ -201,8 +201,20 @@ export default function ClientPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-200">
-        <span className="text-lg font-medium">coach<span className="text-gray-400 font-normal">.phoebe</span></span>
-        <div className="flex items-center gap-3">
+<div className="flex flex-col items-center" style={{gap:'3px'}}>
+  <svg width="105" height="21" viewBox="0 0 210 42">
+    <path d="M 8 28 C 30 4, 54 4, 76 22 C 98 40, 122 40, 144 22 C 166 4, 186 4, 202 14" fill="none" stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round"/>
+    <path d="M 8 18 C 30 38, 54 38, 76 22 C 98 6, 122 6, 144 22 C 166 38, 186 36, 202 28" fill="none" stroke="#5DCAA5" strokeWidth="1.5" strokeLinecap="round"/>
+    <circle cx="76" cy="22" r="3.5" fill="#1D9E75"/>
+    <circle cx="144" cy="22" r="3.5" fill="#1D9E75"/>
+  </svg>
+  <div style={{display:'flex', alignItems:'center', gap:'5px'}}>
+    <span style={{fontSize:'8px', fontFamily:'Georgia,serif', letterSpacing:'0.03em'}}>rebalance</span>
+    <span style={{width:'4px', height:'4px', borderRadius:'50%', background:'#1D9E75', display:'inline-block'}}></span>
+    <span style={{fontSize:'7px', letterSpacing:'0.3em', color:'#888780'}}>co</span>
+    <span style={{width:'4px', height:'4px', borderRadius:'50%', background:'#1D9E75', display:'inline-block'}}></span>
+  </div>
+</div>        <div className="flex items-center gap-3">
           <div className="text-sm text-gray-500">Hi {clientData.name.split(' ')[0]} 👋</div>
           <button onClick={signOut} className="text-xs text-gray-400 hover:text-gray-600">Sign out</button>
         </div>
