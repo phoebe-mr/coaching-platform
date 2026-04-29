@@ -2,29 +2,34 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
+const Logo = () => (
+  <div className="flex flex-col items-center" style={{gap:'4px'}}>
+    <svg width="140" height="28" viewBox="0 0 210 42">
+      <path d="M 8 28 C 30 4, 54 4, 76 22 C 98 40, 122 40, 144 22 C 166 4, 186 4, 202 14" fill="none" stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round"/>
+      <path d="M 8 18 C 30 38, 54 38, 76 22 C 98 6, 122 6, 144 22 C 166 38, 186 36, 202 28" fill="none" stroke="#5DCAA5" strokeWidth="1.5" strokeLinecap="round"/>
+      <circle cx="76" cy="22" r="3.5" fill="#1D9E75"/>
+      <circle cx="144" cy="22" r="3.5" fill="#1D9E75"/>
+    </svg>
+    <div style={{display:'flex', alignItems:'center', gap:'6px'}}>
+      <span style={{fontSize:'11px', fontFamily:'Georgia,serif', letterSpacing:'0.04em', color:'var(--color-text-primary)'}}>rebalance</span>
+      <span style={{width:'5px', height:'5px', borderRadius:'50%', background:'#1D9E75', display:'inline-block'}}></span>
+      <span style={{fontSize:'9px', letterSpacing:'0.35em', color:'#888780'}}>co</span>
+      <span style={{width:'5px', height:'5px', borderRadius:'50%', background:'#1D9E75', display:'inline-block'}}></span>
+    </div>
+  </div>
+)
+
 function buildPlanFromDB(dbSessions, dbExercises) {
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
   return days.map(day => ({
     day,
     sessions: dbSessions.filter(s => s.day === day).map(s => ({
-      dbId: s.id,
-      type: s.type,
-      title: s.title,
-      goal: s.goal || '',
+      dbId: s.id, type: s.type, title: s.title, goal: s.goal || '',
       exercises: dbExercises.filter(e => e.session_id === s.id).sort((a, b) => (a.order || 0) - (b.order || 0)).map(e => ({
-        name: e.name,
-        sets: e.sets || 3,
-        reps: e.reps || 10,
-        tempo: e.tempo || '',
-        notes: e.notes || '',
-        superset: e.superset || null,
-        weights: Array(e.sets || 3).fill(''),
-        done: false,
+        name: e.name, sets: e.sets || 3, reps: e.reps || 10, tempo: e.tempo || '', notes: e.notes || '', superset: e.superset || null,
+        weights: Array(e.sets || 3).fill(''), done: false,
       })),
-      rpe: '',
-      sessionNotes: '',
-      saved: false,
-      started: false,
+      rpe: '', sessionNotes: '', saved: false, started: false,
     }))
   }))
 }
@@ -37,10 +42,7 @@ function groupExercises(exercises) {
     if (ex.superset) {
       const supersetGroup = [{ ex, idx: i }]
       let j = i + 1
-      while (j < exercises.length && exercises[j].superset === ex.superset) {
-        supersetGroup.push({ ex: exercises[j], idx: j })
-        j++
-      }
+      while (j < exercises.length && exercises[j].superset === ex.superset) { supersetGroup.push({ ex: exercises[j], idx: j }); j++ }
       groups.push({ type: 'superset', label: ex.superset, items: supersetGroup })
       i = j
     } else {
@@ -70,8 +72,7 @@ export default function ClientPage() {
       if (!session) { window.location.href = '/login'; return }
       supabase.from('clients').select('*').eq('user_id', session.user.id).single().then(async ({ data, error }) => {
         if (error || !data) { window.location.href = '/login'; return }
-        setClientData(data)
-        setAuthed(true)
+        setClientData(data); setAuthed(true)
         supabase.from('messages').select('*').eq('client_id', data.id).order('created_at', { ascending: true }).then(({ data: msgs }) => {
           if (msgs && msgs.length > 0) setMessages(msgs.map(m => ({ from: m.from_coach ? 'coach' : 'client', text: m.content, time: new Date(m.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) })))
         })
@@ -79,9 +80,7 @@ export default function ClientPage() {
         if (dbSessions && dbSessions.length > 0) {
           const { data: dbExercises } = await supabase.from('exercises').select('*').in('session_id', dbSessions.map(s => s.id)).order('order')
           setPlan(buildPlanFromDB(dbSessions, dbExercises || []))
-        } else {
-          setPlan(buildPlanFromDB([], []))
-        }
+        } else { setPlan(buildPlanFromDB([], [])) }
         setPlanLoaded(true)
         loadHistory(data.id)
       })
@@ -95,17 +94,8 @@ export default function ClientPage() {
       const { data: exercises } = await supabase.from('exercises').select('*').in('session_id', sessions.map(s => s.id)).order('order')
       const { data: logs } = await supabase.from('session_logs').select('*').in('session_id', sessions.map(s => s.id))
       const { data: weightLogs } = await supabase.from('exercise_logs').select('*').in('exercise_id', exercises?.map(e => e.id) || [])
-      setSessionHistory(sessions.map(s => ({
-        ...s,
-        exercises: (exercises?.filter(e => e.session_id === s.id) || []).map(ex => ({
-          ...ex,
-          weights: weightLogs?.filter(w => w.exercise_id === ex.id).sort((a, b) => a.set_number - b.set_number) || []
-        })),
-        log: logs?.find(l => l.session_id === s.id) || null
-      })))
-    } else {
-      setSessionHistory([])
-    }
+      setSessionHistory(sessions.map(s => ({ ...s, exercises: (exercises?.filter(e => e.session_id === s.id) || []).map(ex => ({ ...ex, weights: weightLogs?.filter(w => w.exercise_id === ex.id).sort((a, b) => a.set_number - b.set_number) || [] })), log: logs?.find(l => l.session_id === s.id) || null })))
+    } else { setSessionHistory([]) }
     setHistoryLoading(false)
   }
 
@@ -162,28 +152,16 @@ export default function ClientPage() {
   }
 
   async function sendMessage() {
-  if (!msgInput.trim()) return
-  const { error } = await supabase.from('messages').insert({ client_id: clientData.id, from_coach: false, content: msgInput })
-  if (!error) {
-    setMessages([...messages, { from: 'client', text: msgInput, time: 'just now' }])
-    setMsgInput('')
-    console.log('Calling edge function...')
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/notify-message`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
-      },
-      body: JSON.stringify({ record: { content: msgInput, from_coach: false, client_email: clientData.email } })
-    })
-    console.log('Edge function response:', response.status)
+    if (!msgInput.trim()) return
+    const { error } = await supabase.from('messages').insert({ client_id: clientData.id, from_coach: false, content: msgInput })
+    if (!error) {
+      setMessages([...messages, { from: 'client', text: msgInput, time: 'just now' }])
+      setMsgInput('')
+      await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/notify-message`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}` }, body: JSON.stringify({ record: { content: msgInput, from_coach: false, client_email: clientData.email } }) })
+    }
   }
- }
 
-  async function signOut() {
-    await supabase.auth.signOut()
-    window.location.href = '/login'
-  }
+  async function signOut() { await supabase.auth.signOut(); window.location.href = '/login' }
 
   async function submitDiary() {
     const today = new Date().toISOString().split('T')[0]
@@ -200,21 +178,9 @@ export default function ClientPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-200">
-<div className="flex flex-col items-center" style={{gap:'3px'}}>
-  <svg width="105" height="21" viewBox="0 0 210 42">
-    <path d="M 8 28 C 30 4, 54 4, 76 22 C 98 40, 122 40, 144 22 C 166 4, 186 4, 202 14" fill="none" stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round"/>
-    <path d="M 8 18 C 30 38, 54 38, 76 22 C 98 6, 122 6, 144 22 C 166 38, 186 36, 202 28" fill="none" stroke="#5DCAA5" strokeWidth="1.5" strokeLinecap="round"/>
-    <circle cx="76" cy="22" r="3.5" fill="#1D9E75"/>
-    <circle cx="144" cy="22" r="3.5" fill="#1D9E75"/>
-  </svg>
-  <div style={{display:'flex', alignItems:'center', gap:'5px'}}>
-    <span style={{fontSize:'8px', fontFamily:'Georgia,serif', letterSpacing:'0.03em'}}>rebalance</span>
-    <span style={{width:'4px', height:'4px', borderRadius:'50%', background:'#1D9E75', display:'inline-block'}}></span>
-    <span style={{fontSize:'7px', letterSpacing:'0.3em', color:'#888780'}}>co</span>
-    <span style={{width:'4px', height:'4px', borderRadius:'50%', background:'#1D9E75', display:'inline-block'}}></span>
-  </div>
-</div>        <div className="flex items-center gap-3">
+      <div className="mb-6 pb-4 border-b border-gray-200">
+        <div className="flex justify-center mb-3"><Logo /></div>
+        <div className="flex justify-end items-center gap-3">
           <div className="text-sm text-gray-500">Hi {clientData.name.split(' ')[0]} 👋</div>
           <button onClick={signOut} className="text-xs text-gray-400 hover:text-gray-600">Sign out</button>
         </div>
@@ -228,11 +194,9 @@ export default function ClientPage() {
 
       {tab === 'plan' && (
         <div>
-          {!planLoaded ? (
-            <div className="text-sm text-gray-400 text-center py-8">Loading your plan…</div>
-          ) : plan.every(d => d.sessions.length === 0) ? (
-            <div className="text-sm text-gray-400 text-center py-8">Your coach is setting up your plan — check back soon!</div>
-          ) : (
+          {!planLoaded ? <div className="text-sm text-gray-400 text-center py-8">Loading your plan…</div>
+          : plan.every(d => d.sessions.length === 0) ? <div className="text-sm text-gray-400 text-center py-8">Your coach is setting up your plan — check back soon!</div>
+          : (
             <div>
               <div className="text-xs font-medium text-gray-500 mb-4">Week {clientData.week}</div>
               <div className="flex flex-col gap-1.5">
@@ -390,11 +354,9 @@ export default function ClientPage() {
       {tab === 'history' && (
         <div>
           <div className="text-xs font-medium text-gray-500 mb-4">Your completed sessions</div>
-          {historyLoading ? (
-            <div className="text-sm text-gray-400 text-center py-8">Loading history…</div>
-          ) : sessionHistory.length === 0 ? (
-            <div className="text-sm text-gray-400 text-center py-8">No completed sessions yet — complete a session to see it here!</div>
-          ) : (
+          {historyLoading ? <div className="text-sm text-gray-400 text-center py-8">Loading history…</div>
+          : sessionHistory.length === 0 ? <div className="text-sm text-gray-400 text-center py-8">No completed sessions yet — complete a session to see it here!</div>
+          : (
             <div className="flex flex-col gap-3">
               {sessionHistory.map((session, i) => (
                 <div key={i} className="bg-white border border-gray-200 rounded-xl p-4">
@@ -405,9 +367,7 @@ export default function ClientPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400">{session.day}</span>
-                      {session.log?.rpe && (
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded ${session.log.rpe <= 4 ? 'bg-green-100 text-green-700' : session.log.rpe <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>RPE {session.log.rpe}</span>
-                      )}
+                      {session.log?.rpe && <span className={`text-xs font-medium px-2 py-0.5 rounded ${session.log.rpe <= 4 ? 'bg-green-100 text-green-700' : session.log.rpe <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>RPE {session.log.rpe}</span>}
                     </div>
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -430,9 +390,7 @@ export default function ClientPage() {
                       </div>
                     ))}
                   </div>
-                  {session.log?.notes && (
-                    <div className="text-xs text-gray-500 italic mt-3 pt-3 border-t border-gray-100">"{session.log.notes}"</div>
-                  )}
+                  {session.log?.notes && <div className="text-xs text-gray-500 italic mt-3 pt-3 border-t border-gray-100">"{session.log.notes}"</div>}
                 </div>
               ))}
             </div>
@@ -479,9 +437,8 @@ export default function ClientPage() {
       {tab === 'messages' && (
         <div>
           <div className="flex flex-col gap-3 mb-4">
-            {messages.length === 0 ? (
-              <div className="text-sm text-gray-400 text-center py-8">No messages yet</div>
-            ) : messages.map((m, i) => (
+            {messages.length === 0 ? <div className="text-sm text-gray-400 text-center py-8">No messages yet</div>
+            : messages.map((m, i) => (
               <div key={i} className={`flex flex-col ${m.from === 'client' ? 'items-end' : 'items-start'}`}>
                 <div className={`max-w-xs px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${m.from === 'client' ? 'bg-blue-100 text-blue-900 rounded-br-sm' : 'bg-gray-100 text-gray-800 rounded-bl-sm'}`}>{m.text}</div>
                 <div className="text-xs text-gray-400 mt-1">{m.from === 'client' ? 'You' : 'Phoebe'} · {m.time}</div>

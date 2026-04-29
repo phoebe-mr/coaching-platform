@@ -2,6 +2,23 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
 
+const Logo = () => (
+  <div className="flex flex-col items-center" style={{gap:'4px'}}>
+    <svg width="140" height="28" viewBox="0 0 210 42">
+      <path d="M 8 28 C 30 4, 54 4, 76 22 C 98 40, 122 40, 144 22 C 166 4, 186 4, 202 14" fill="none" stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round"/>
+      <path d="M 8 18 C 30 38, 54 38, 76 22 C 98 6, 122 6, 144 22 C 166 38, 186 36, 202 28" fill="none" stroke="#5DCAA5" strokeWidth="1.5" strokeLinecap="round"/>
+      <circle cx="76" cy="22" r="3.5" fill="#1D9E75"/>
+      <circle cx="144" cy="22" r="3.5" fill="#1D9E75"/>
+    </svg>
+    <div style={{display:'flex', alignItems:'center', gap:'6px'}}>
+      <span style={{fontSize:'11px', fontFamily:'Georgia,serif', letterSpacing:'0.04em', color:'var(--color-text-primary)'}}>rebalance</span>
+      <span style={{width:'5px', height:'5px', borderRadius:'50%', background:'#1D9E75', display:'inline-block'}}></span>
+      <span style={{fontSize:'9px', letterSpacing:'0.35em', color:'#888780'}}>co</span>
+      <span style={{width:'5px', height:'5px', borderRadius:'50%', background:'#1D9E75', display:'inline-block'}}></span>
+    </div>
+  </div>
+)
+
 export default function Home() {
   const [screen, setScreen] = useState('dashboard')
   const [activeClient, setActiveClient] = useState(null)
@@ -46,30 +63,15 @@ export default function Home() {
   }, [])
 
   async function addClient() {
-    if (!newClientForm.name.trim() || !newClientForm.email.trim() || !newClientForm.password.trim()) {
-      setAddClientError('Name, email and password are required')
-      return
-    }
-    setAddingClient(true)
-    setAddClientError('')
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: newClientForm.email,
-      password: newClientForm.password,
-    })
+    if (!newClientForm.name.trim() || !newClientForm.email.trim() || !newClientForm.password.trim()) { setAddClientError('Name, email and password are required'); return }
+    setAddingClient(true); setAddClientError('')
+    const { data: authData, error: authError } = await supabase.auth.signUp({ email: newClientForm.email, password: newClientForm.password })
     if (authError) { setAddClientError(authError.message); setAddingClient(false); return }
-    const { data: clientData, error: clientError } = await supabase.from('clients').insert({
-      name: newClientForm.name,
-      email: newClientForm.email,
-      programme: newClientForm.programme || 'General programme',
-      week: parseInt(newClientForm.week) || 1,
-      user_id: authData.user.id,
-    }).select().single()
+    const { data: clientData, error: clientError } = await supabase.from('clients').insert({ name: newClientForm.name, email: newClientForm.email, programme: newClientForm.programme || 'General programme', week: parseInt(newClientForm.week) || 1, user_id: authData.user.id }).select().single()
     if (clientError) { setAddClientError(clientError.message); setAddingClient(false); return }
     const newClient = { ...clientData, initials: clientData.name.split(' ').map(n => n[0]).join(''), colour: colours[clients.length % colours.length], meta: `Week ${clientData.week} of 12 · ${clientData.programme}`, status: 'On track' }
     setClients([...clients, newClient])
-    setShowAddClient(false)
-    setNewClientForm({ name: '', email: '', password: '', programme: '', week: 1 })
-    setAddingClient(false)
+    setShowAddClient(false); setNewClientForm({ name: '', email: '', password: '', programme: '', week: 1 }); setAddingClient(false)
   }
 
   async function loadPlan(clientId) {
@@ -78,9 +80,7 @@ export default function Home() {
     if (sessions && sessions.length > 0) {
       const { data: exercises } = await supabase.from('exercises').select('*').in('session_id', sessions.map(s => s.id)).order('order')
       setPlanSessions(sessions.map(s => ({ ...s, exercises: exercises?.filter(e => e.session_id === s.id) || [] })))
-    } else {
-      setPlanSessions([])
-    }
+    } else { setPlanSessions([]) }
     setPlanLoading(false)
   }
 
@@ -91,48 +91,28 @@ export default function Home() {
       const { data: exercises } = await supabase.from('exercises').select('*').in('session_id', sessions.map(s => s.id)).order('order')
       const { data: logs } = await supabase.from('session_logs').select('*').in('session_id', sessions.map(s => s.id))
       const { data: weightLogs } = await supabase.from('exercise_logs').select('*').in('exercise_id', exercises?.map(e => e.id) || [])
-      setSessionHistory(sessions.map(s => ({
-        ...s,
-        exercises: (exercises?.filter(e => e.session_id === s.id) || []).map(ex => ({
-          ...ex,
-          weights: weightLogs?.filter(w => w.exercise_id === ex.id).sort((a, b) => a.set_number - b.set_number) || []
-        })),
-        log: logs?.find(l => l.session_id === s.id) || null
-      })))
-    } else {
-      setSessionHistory([])
-    }
+      setSessionHistory(sessions.map(s => ({ ...s, exercises: (exercises?.filter(e => e.session_id === s.id) || []).map(ex => ({ ...ex, weights: weightLogs?.filter(w => w.exercise_id === ex.id).sort((a, b) => a.set_number - b.set_number) || [] })), log: logs?.find(l => l.session_id === s.id) || null })))
+    } else { setSessionHistory([]) }
     setHistoryLoading(false)
   }
 
   async function openClient(client) {
-    setActiveClient(client)
-    setScreen('client')
-    setTab('plan')
-    setExpandedDay(null)
-    loadPlan(client.id)
-    loadSessionHistory(client.id)
+    setActiveClient(client); setScreen('client'); setTab('plan'); setExpandedDay(null)
+    loadPlan(client.id); loadSessionHistory(client.id)
     const { data: diary } = await supabase.from('diary_entries').select('*').eq('client_id', client.id).order('date', { ascending: false })
     if (diary) setDiaryEntries(diary)
     const { data: msgs } = await supabase.from('messages').select('*').eq('client_id', client.id).order('created_at', { ascending: true })
     if (msgs) {
       setMessages(msgs.map(m => ({ from: m.from_coach ? 'coach' : 'client', text: m.content, time: new Date(m.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) })))
       const unreadIds = msgs.filter(m => !m.from_coach && !m.read).map(m => m.id)
-      if (unreadIds.length > 0) {
-        await supabase.from('messages').update({ read: true }).in('id', unreadIds)
-        setUnreadCount(prev => Math.max(0, prev - unreadIds.length))
-      }
+      if (unreadIds.length > 0) { await supabase.from('messages').update({ read: true }).in('id', unreadIds); setUnreadCount(prev => Math.max(0, prev - unreadIds.length)) }
     }
   }
 
   async function addSession() {
     if (!newSessionForm.title.trim()) return
     const { data, error } = await supabase.from('sessions').insert({ client_id: activeClient.id, week: activeClient.week, day: addingSessionDay, type: newSessionForm.type, title: newSessionForm.title, goal: newSessionForm.goal, prescribed: true }).select().single()
-    if (!error && data) {
-      setPlanSessions([...planSessions, { ...data, exercises: [] }])
-      setAddingSessionDay(null)
-      setNewSessionForm({ type: 'strength', title: '', goal: '' })
-    }
+    if (!error && data) { setPlanSessions([...planSessions, { ...data, exercises: [] }]); setAddingSessionDay(null); setNewSessionForm({ type: 'strength', title: '', goal: '' }) }
   }
 
   async function deleteSession(sessionId) {
@@ -145,11 +125,7 @@ export default function Home() {
     if (!newExerciseForm.name.trim()) return
     const session = planSessions.find(s => s.id === sessionId)
     const { data, error } = await supabase.from('exercises').insert({ session_id: sessionId, name: newExerciseForm.name, sets: parseInt(newExerciseForm.sets) || 3, reps: parseInt(newExerciseForm.reps) || 10, tempo: newExerciseForm.tempo || null, notes: newExerciseForm.notes || null, superset: newExerciseForm.superset || null, order: session.exercises.length }).select().single()
-    if (!error && data) {
-      setPlanSessions(planSessions.map(s => s.id === sessionId ? { ...s, exercises: [...s.exercises, data] } : s))
-      setAddingExerciseSession(null)
-      setNewExerciseForm({ name: '', sets: 3, reps: 10, tempo: '', notes: '', superset: '' })
-    }
+    if (!error && data) { setPlanSessions(planSessions.map(s => s.id === sessionId ? { ...s, exercises: [...s.exercises, data] } : s)); setAddingExerciseSession(null); setNewExerciseForm({ name: '', sets: 3, reps: 10, tempo: '', notes: '', superset: '' }) }
   }
 
   async function deleteExercise(sessionId, exerciseId) {
@@ -158,52 +134,29 @@ export default function Home() {
   }
 
   async function sendMessage() {
-  if (!msgInput.trim()) return
-  const { error } = await supabase.from('messages').insert({ client_id: activeClient.id, from_coach: true, content: msgInput, read: true })
-  if (!error) {
-    setMessages([...messages, { from: 'coach', text: msgInput, time: 'just now' }])
-    setMsgInput('')
-    await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/notify-message`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
-      },
-      body: JSON.stringify({ record: { content: msgInput, from_coach: true, client_email: activeClient.email } })
-    })
+    if (!msgInput.trim()) return
+    const { error } = await supabase.from('messages').insert({ client_id: activeClient.id, from_coach: true, content: msgInput, read: true })
+    if (!error) {
+      setMessages([...messages, { from: 'coach', text: msgInput, time: 'just now' }])
+      setMsgInput('')
+      await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/notify-message`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}` }, body: JSON.stringify({ record: { content: msgInput, from_coach: true, client_email: activeClient.email } }) })
+    }
   }
- }
 
-  async function signOut() {
-    await supabase.auth.signOut()
-    window.location.href = '/login'
-  }
+  async function signOut() { await supabase.auth.signOut(); window.location.href = '/login' }
 
   if (!authed) return <div className="min-h-screen flex items-center justify-center"><div className="text-sm text-gray-400">Loading…</div></div>
 
   if (screen === 'dashboard') {
     return (
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-200">
-<div className="flex flex-col items-center" style={{gap:'3px'}}>
-  <svg width="105" height="21" viewBox="0 0 210 42">
-    <path d="M 8 28 C 30 4, 54 4, 76 22 C 98 40, 122 40, 144 22 C 166 4, 186 4, 202 14" fill="none" stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round"/>
-    <path d="M 8 18 C 30 38, 54 38, 76 22 C 98 6, 122 6, 144 22 C 166 38, 186 36, 202 28" fill="none" stroke="#5DCAA5" strokeWidth="1.5" strokeLinecap="round"/>
-    <circle cx="76" cy="22" r="3.5" fill="#1D9E75"/>
-    <circle cx="144" cy="22" r="3.5" fill="#1D9E75"/>
-  </svg>
-  <div style={{display:'flex', alignItems:'center', gap:'5px'}}>
-    <span style={{fontSize:'8px', fontFamily:'Georgia,serif', letterSpacing:'0.03em'}}>rebalance</span>
-    <span style={{width:'4px', height:'4px', borderRadius:'50%', background:'#1D9E75', display:'inline-block'}}></span>
-    <span style={{fontSize:'7px', letterSpacing:'0.3em', color:'#888780'}}>co</span>
-    <span style={{width:'4px', height:'4px', borderRadius:'50%', background:'#1D9E75', display:'inline-block'}}></span>
-  </div>
-</div>          <div className="flex items-center gap-3">
+        <div className="mb-6 pb-4 border-b border-gray-200">
+          <div className="flex justify-center mb-3"><Logo /></div>
+          <div className="flex justify-end items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-medium">PR</div>
             <button onClick={signOut} className="text-xs text-gray-400 hover:text-gray-600">Sign out</button>
           </div>
         </div>
-
         <div className="grid grid-cols-3 gap-3 mb-8">
           {[['Active clients', clients.length.toString()], ['Diaries today', diariesToday.toString()], ['Unread messages', unreadCount.toString()]].map(([label, value]) => (
             <div key={label} className="bg-gray-50 rounded-lg p-4">
@@ -212,12 +165,10 @@ export default function Home() {
             </div>
           ))}
         </div>
-
         <div className="flex items-center justify-between mb-3">
           <div className="text-xs font-medium text-gray-500">Your clients</div>
           <button onClick={() => setShowAddClient(!showAddClient)} className="text-xs font-medium text-blue-600 hover:text-blue-800">+ Add client</button>
         </div>
-
         {showAddClient && (
           <div className="border border-blue-100 rounded-xl p-4 mb-4 bg-blue-50">
             <div className="text-xs font-medium text-gray-600 mb-3">New client</div>
@@ -226,10 +177,7 @@ export default function Home() {
               <input type="email" value={newClientForm.email} onChange={e => setNewClientForm({...newClientForm, email: e.target.value})} placeholder="Email address" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white" />
               <input type="password" value={newClientForm.password} onChange={e => setNewClientForm({...newClientForm, password: e.target.value})} placeholder="Temporary password" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white" />
               <input value={newClientForm.programme} onChange={e => setNewClientForm({...newClientForm, programme: e.target.value})} placeholder="Programme name e.g. Perimenopause programme" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white" />
-              <div>
-                <div className="text-xs text-gray-500 mb-1">Starting week</div>
-                <input type="number" value={newClientForm.week} onChange={e => setNewClientForm({...newClientForm, week: e.target.value})} min="1" max="52" className="w-20 text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none text-center bg-white" />
-              </div>
+              <div><div className="text-xs text-gray-500 mb-1">Starting week</div><input type="number" value={newClientForm.week} onChange={e => setNewClientForm({...newClientForm, week: e.target.value})} min="1" max="52" className="w-20 text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none text-center bg-white" /></div>
               {addClientError && <div className="text-xs text-red-500">{addClientError}</div>}
               <div className="flex gap-2 mt-1">
                 <button onClick={addClient} disabled={addingClient} className="flex-1 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 disabled:opacity-50">{addingClient ? 'Adding…' : 'Add client'}</button>
@@ -238,12 +186,9 @@ export default function Home() {
             </div>
           </div>
         )}
-
-        {loading ? (
-          <div className="text-sm text-gray-400 py-8 text-center">Loading clients…</div>
-        ) : clients.length === 0 ? (
-          <div className="text-sm text-gray-400 py-8 text-center">No clients yet — add one above</div>
-        ) : (
+        {loading ? <div className="text-sm text-gray-400 py-8 text-center">Loading clients…</div>
+        : clients.length === 0 ? <div className="text-sm text-gray-400 py-8 text-center">No clients yet — add one above</div>
+        : (
           <div className="flex flex-col gap-2">
             {clients.map(c => (
               <div key={c.id} onClick={() => openClient(c)} className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl cursor-pointer hover:border-gray-300 transition-colors">
@@ -272,7 +217,6 @@ export default function Home() {
           <div className="text-sm text-gray-500 mt-0.5">{activeClient.meta}</div>
         </div>
       </div>
-
       <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
         {[['plan','Training plan'],['editplan','Edit plan'],['history','Session history'],['diary','Food diary'],['messages','Messages']].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${tab === key ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>{label}</button>
@@ -282,11 +226,9 @@ export default function Home() {
       {tab === 'plan' && (
         <div>
           <div className="text-xs font-medium text-gray-500 mb-4">Week {activeClient.week} — prescribed plan</div>
-          {planLoading ? (
-            <div className="text-sm text-gray-400 text-center py-8">Loading plan…</div>
-          ) : planSessions.length === 0 ? (
-            <div className="text-sm text-gray-400 text-center py-8">No plan yet — go to Edit plan to create one</div>
-          ) : (
+          {planLoading ? <div className="text-sm text-gray-400 text-center py-8">Loading plan…</div>
+          : planSessions.length === 0 ? <div className="text-sm text-gray-400 text-center py-8">No plan yet — go to Edit plan to create one</div>
+          : (
             <div className="flex flex-col gap-1.5">
               {days.map(day => {
                 const daySessions = planSessions.filter(s => s.day === day)
@@ -368,9 +310,7 @@ export default function Home() {
               <div key={day} className="mb-5">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-gray-700">{day}</span>
-                  {addingSessionDay !== day && (
-                    <button onClick={() => { setAddingSessionDay(day); setNewSessionForm({ type: 'strength', title: '', goal: '' }) }} className="text-xs text-blue-600 hover:text-blue-800">+ Add session</button>
-                  )}
+                  {addingSessionDay !== day && <button onClick={() => { setAddingSessionDay(day); setNewSessionForm({ type: 'strength', title: '', goal: '' }) }} className="text-xs text-blue-600 hover:text-blue-800">+ Add session</button>}
                 </div>
                 {daySessions.map(session => (
                   <div key={session.id} className="border border-gray-200 rounded-xl p-3 mb-2 bg-white">
@@ -430,9 +370,7 @@ export default function Home() {
                     </div>
                   </div>
                 )}
-                {daySessions.length === 0 && addingSessionDay !== day && (
-                  <div className="text-xs text-gray-300 py-1">Rest day</div>
-                )}
+                {daySessions.length === 0 && addingSessionDay !== day && <div className="text-xs text-gray-300 py-1">Rest day</div>}
               </div>
             )
           })}
@@ -442,11 +380,9 @@ export default function Home() {
       {tab === 'history' && (
         <div>
           <div className="text-xs font-medium text-gray-500 mb-4">Completed sessions</div>
-          {historyLoading ? (
-            <div className="text-sm text-gray-400 text-center py-8">Loading history…</div>
-          ) : sessionHistory.length === 0 ? (
-            <div className="text-sm text-gray-400 text-center py-8">No completed sessions yet</div>
-          ) : (
+          {historyLoading ? <div className="text-sm text-gray-400 text-center py-8">Loading history…</div>
+          : sessionHistory.length === 0 ? <div className="text-sm text-gray-400 text-center py-8">No completed sessions yet</div>
+          : (
             <div className="flex flex-col gap-3">
               {sessionHistory.map((session, i) => (
                 <div key={i} className="bg-white border border-gray-200 rounded-xl p-4">
@@ -457,9 +393,7 @@ export default function Home() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400">{session.day}</span>
-                      {session.log?.rpe && (
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded ${session.log.rpe <= 4 ? 'bg-green-100 text-green-700' : session.log.rpe <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>RPE {session.log.rpe}</span>
-                      )}
+                      {session.log?.rpe && <span className={`text-xs font-medium px-2 py-0.5 rounded ${session.log.rpe <= 4 ? 'bg-green-100 text-green-700' : session.log.rpe <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>RPE {session.log.rpe}</span>}
                     </div>
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -482,9 +416,7 @@ export default function Home() {
                       </div>
                     ))}
                   </div>
-                  {session.log?.notes && (
-                    <div className="text-xs text-gray-500 italic mt-3 pt-3 border-t border-gray-100">"{session.log.notes}"</div>
-                  )}
+                  {session.log?.notes && <div className="text-xs text-gray-500 italic mt-3 pt-3 border-t border-gray-100">"{session.log.notes}"</div>}
                 </div>
               ))}
             </div>
@@ -494,9 +426,8 @@ export default function Home() {
 
       {tab === 'diary' && (
         <div className="flex flex-col gap-3">
-          {diaryEntries.length === 0 ? (
-            <div className="text-sm text-gray-400 py-8 text-center">No diary entries yet</div>
-          ) : diaryEntries.map((d, i) => (
+          {diaryEntries.length === 0 ? <div className="text-sm text-gray-400 py-8 text-center">No diary entries yet</div>
+          : diaryEntries.map((d, i) => (
             <div key={i} className="bg-white border border-gray-200 rounded-xl p-4">
               <div className="text-xs font-medium text-gray-500 mb-3">{new Date(d.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
               <div className="flex flex-col gap-1.5 mb-3">
@@ -523,9 +454,8 @@ export default function Home() {
       {tab === 'messages' && (
         <div>
           <div className="flex flex-col gap-3 mb-4">
-            {messages.length === 0 ? (
-              <div className="text-sm text-gray-400 text-center py-8">No messages yet</div>
-            ) : messages.map((m, i) => (
+            {messages.length === 0 ? <div className="text-sm text-gray-400 text-center py-8">No messages yet</div>
+            : messages.map((m, i) => (
               <div key={i} className={`flex flex-col ${m.from === 'coach' ? 'items-end' : 'items-start'}`}>
                 <div className={`max-w-xs px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${m.from === 'coach' ? 'bg-blue-100 text-blue-900 rounded-br-sm' : 'bg-gray-100 text-gray-800 rounded-bl-sm'}`}>{m.text}</div>
                 <div className="text-xs text-gray-400 mt-1">{m.from === 'coach' ? 'You' : activeClient.name.split(' ')[0]} · {m.time}</div>
