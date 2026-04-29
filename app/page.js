@@ -19,6 +19,15 @@ const Logo = () => (
   </div>
 )
 
+function getCurrentWeek(startDate) {
+  if (!startDate) return 1
+  const start = new Date(startDate)
+  const today = new Date()
+  const diffMs = today - start
+  const diffWeeks = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000))
+  return Math.max(1, diffWeeks + 1)
+}
+
 export default function Home() {
   const [screen, setScreen] = useState('dashboard')
   const [activeClient, setActiveClient] = useState(null)
@@ -34,16 +43,19 @@ export default function Home() {
   const [diariesToday, setDiariesToday] = useState(0)
   const [planSessions, setPlanSessions] = useState([])
   const [planLoading, setPlanLoading] = useState(false)
+  const [planWeek, setPlanWeek] = useState(1)
   const [addingSessionDay, setAddingSessionDay] = useState(null)
   const [newSessionForm, setNewSessionForm] = useState({ type: 'strength', title: '', goal: '' })
   const [addingExerciseSession, setAddingExerciseSession] = useState(null)
   const [newExerciseForm, setNewExerciseForm] = useState({ name: '', sets: 3, reps: 10, tempo: '', notes: '', superset: '' })
   const [showAddClient, setShowAddClient] = useState(false)
-  const [newClientForm, setNewClientForm] = useState({ name: '', email: '', password: '', programme: '', week: 1 })
+  const [newClientForm, setNewClientForm] = useState({ name: '', email: '', password: '', programme: '', start_date: '', programme_length: 12 })
   const [addingClient, setAddingClient] = useState(false)
   const [addClientError, setAddClientError] = useState('')
   const [sessionHistory, setSessionHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [editingProgramme, setEditingProgramme] = useState(false)
+  const [programmeForm, setProgrammeForm] = useState({ programme_length: 12, start_date: '' })
 
   const colours = ['bg-blue-100 text-blue-700', 'bg-green-100 text-green-700', 'bg-pink-100 text-pink-700', 'bg-purple-100 text-purple-700', 'bg-amber-100 text-amber-700']
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -53,7 +65,14 @@ export default function Home() {
       if (!session) { window.location.href = '/login'; return }
       setAuthed(true)
       supabase.from('clients').select('*').then(({ data, error }) => {
-        if (!error) setClients(data.map((c, i) => ({ ...c, initials: c.name.split(' ').map(n => n[0]).join(''), colour: colours[i % colours.length], meta: `Week ${c.week} of 12 · ${c.programme}`, status: 'On track' })))
+        if (!error) setClients(data.map((c, i) => ({
+          ...c,
+          initials: c.name.split(' ').map(n => n[0]).join(''),
+          colour: colours[i % colours.length],
+          currentWeek: getCurrentWeek(c.start_date),
+          meta: `Week ${getCurrentWeek(c.start_date)} of ${c.programme_length || 12} · ${c.programme}`,
+          status: 'On track'
+        })))
         setLoading(false)
       })
       const today = new Date().toISOString().split('T')[0]
@@ -62,30 +81,9 @@ export default function Home() {
     })
   }, [])
 
-  async function advanceWeek() {
-    const newWeek = activeClient.week + 1
-    await supabase.from('clients').update({ week: newWeek }).eq('id', activeClient.id)
-    const updated = { ...activeClient, week: newWeek, meta: `Week ${newWeek} of 12 · ${activeClient.programme}` }
-    setActiveClient(updated)
-    setClients(clients.map(c => c.id === activeClient.id ? updated : c))
-    loadPlan(activeClient.id)
-  }
-
-  async function addClient() {
-    if (!newClientForm.name.trim() || !newClientForm.email.trim() || !newClientForm.password.trim()) { setAddClientError('Name, email and password are required'); return }
-    setAddingClient(true); setAddClientError('')
-    const { data: authData, error: authError } = await supabase.auth.signUp({ email: newClientForm.email, password: newClientForm.password })
-    if (authError) { setAddClientError(authError.message); setAddingClient(false); return }
-    const { data: clientData, error: clientError } = await supabase.from('clients').insert({ name: newClientForm.name, email: newClientForm.email, programme: newClientForm.programme || 'General programme', week: parseInt(newClientForm.week) || 1, user_id: authData.user.id }).select().single()
-    if (clientError) { setAddClientError(clientError.message); setAddingClient(false); return }
-    const newClient = { ...clientData, initials: clientData.name.split(' ').map(n => n[0]).join(''), colour: colours[clients.length % colours.length], meta: `Week ${clientData.week} of 12 · ${clientData.programme}`, status: 'On track' }
-    setClients([...clients, newClient])
-    setShowAddClient(false); setNewClientForm({ name: '', email: '', password: '', programme: '', week: 1 }); setAddingClient(false)
-  }
-
-  async function loadPlan(clientId) {
+  async function loadPlan(clientId, week) {
     setPlanLoading(true)
-    const { data: sessions } = await supabase.from('sessions').select('*').eq('client_id', clientId).eq('prescribed', true).order('id')
+    const { data: sessions } = await supabase.from('sessions').select('*').eq('client_id', clientId).eq('prescribed', true).eq('week', week).order('id')
     if (sessions && sessions.length > 0) {
       const { data: exercises } = await supabase.from('exercises').select('*').in('session_id', sessions.map(s => s.id)).order('order')
       setPlanSessions(sessions.map(s => ({ ...s, exercises: exercises?.filter(e => e.session_id === s.id) || [] })))
@@ -106,8 +104,11 @@ export default function Home() {
   }
 
   async function openClient(client) {
+    const currentWeek = getCurrentWeek(client.start_date)
     setActiveClient(client); setScreen('client'); setTab('plan'); setExpandedDay(null)
-    loadPlan(client.id); loadSessionHistory(client.id)
+    setPlanWeek(currentWeek)
+    loadPlan(client.id, currentWeek)
+    loadSessionHistory(client.id)
     const { data: diary } = await supabase.from('diary_entries').select('*').eq('client_id', client.id).order('date', { ascending: false })
     if (diary) setDiaryEntries(diary)
     const { data: msgs } = await supabase.from('messages').select('*').eq('client_id', client.id).order('created_at', { ascending: true })
@@ -118,9 +119,39 @@ export default function Home() {
     }
   }
 
+  function changePlanWeek(newWeek) {
+    if (newWeek < 1 || newWeek > (activeClient.programme_length || 12)) return
+    setPlanWeek(newWeek)
+    loadPlan(activeClient.id, newWeek)
+    setExpandedDay(null)
+  }
+
+  async function saveProgrammeSettings() {
+    await supabase.from('clients').update({ programme_length: parseInt(programmeForm.programme_length), start_date: programmeForm.start_date }).eq('id', activeClient.id)
+    const updated = { ...activeClient, programme_length: parseInt(programmeForm.programme_length), start_date: programmeForm.start_date, currentWeek: getCurrentWeek(programmeForm.start_date), meta: `Week ${getCurrentWeek(programmeForm.start_date)} of ${programmeForm.programme_length} · ${activeClient.programme}` }
+    setActiveClient(updated)
+    setClients(clients.map(c => c.id === activeClient.id ? updated : c))
+    setEditingProgramme(false)
+    setPlanWeek(getCurrentWeek(programmeForm.start_date))
+    loadPlan(activeClient.id, getCurrentWeek(programmeForm.start_date))
+  }
+
+  async function addClient() {
+    if (!newClientForm.name.trim() || !newClientForm.email.trim() || !newClientForm.password.trim()) { setAddClientError('Name, email and password are required'); return }
+    setAddingClient(true); setAddClientError('')
+    const { data: authData, error: authError } = await supabase.auth.signUp({ email: newClientForm.email, password: newClientForm.password })
+    if (authError) { setAddClientError(authError.message); setAddingClient(false); return }
+    const startDate = newClientForm.start_date || new Date().toISOString().split('T')[0]
+    const { data: clientData, error: clientError } = await supabase.from('clients').insert({ name: newClientForm.name, email: newClientForm.email, programme: newClientForm.programme || 'General programme', week: 1, start_date: startDate, programme_length: parseInt(newClientForm.programme_length) || 12, user_id: authData.user.id }).select().single()
+    if (clientError) { setAddClientError(clientError.message); setAddingClient(false); return }
+    const newClient = { ...clientData, initials: clientData.name.split(' ').map(n => n[0]).join(''), colour: colours[clients.length % colours.length], currentWeek: getCurrentWeek(startDate), meta: `Week ${getCurrentWeek(startDate)} of ${clientData.programme_length} · ${clientData.programme}`, status: 'On track' }
+    setClients([...clients, newClient])
+    setShowAddClient(false); setNewClientForm({ name: '', email: '', password: '', programme: '', start_date: '', programme_length: 12 }); setAddingClient(false)
+  }
+
   async function addSession() {
     if (!newSessionForm.title.trim()) return
-    const { data, error } = await supabase.from('sessions').insert({ client_id: activeClient.id, week: activeClient.week, day: addingSessionDay, type: newSessionForm.type, title: newSessionForm.title, goal: newSessionForm.goal, prescribed: true }).select().single()
+    const { data, error } = await supabase.from('sessions').insert({ client_id: activeClient.id, week: planWeek, day: addingSessionDay, type: newSessionForm.type, title: newSessionForm.title, goal: newSessionForm.goal, prescribed: true }).select().single()
     if (!error && data) { setPlanSessions([...planSessions, { ...data, exercises: [] }]); setAddingSessionDay(null); setNewSessionForm({ type: 'strength', title: '', goal: '' }) }
   }
 
@@ -186,7 +217,16 @@ export default function Home() {
               <input type="email" value={newClientForm.email} onChange={e => setNewClientForm({...newClientForm, email: e.target.value})} placeholder="Email address" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white" />
               <input type="password" value={newClientForm.password} onChange={e => setNewClientForm({...newClientForm, password: e.target.value})} placeholder="Temporary password" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white" />
               <input value={newClientForm.programme} onChange={e => setNewClientForm({...newClientForm, programme: e.target.value})} placeholder="Programme name e.g. Perimenopause programme" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white" />
-              <div><div className="text-xs text-gray-500 mb-1">Starting week</div><input type="number" value={newClientForm.week} onChange={e => setNewClientForm({...newClientForm, week: e.target.value})} min="1" max="52" className="w-20 text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none text-center bg-white" /></div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">Programme start date</div>
+                  <input type="date" value={newClientForm.start_date} onChange={e => setNewClientForm({...newClientForm, start_date: e.target.value})} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white" />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">Programme length (weeks)</div>
+                  <input type="number" value={newClientForm.programme_length} onChange={e => setNewClientForm({...newClientForm, programme_length: e.target.value})} min="1" max="52" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none text-center bg-white" />
+                </div>
+              </div>
               {addClientError && <div className="text-xs text-red-500">{addClientError}</div>}
               <div className="flex gap-2 mt-1">
                 <button onClick={addClient} disabled={addingClient} className="flex-1 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 disabled:opacity-50">{addingClient ? 'Adding…' : 'Add client'}</button>
@@ -216,19 +256,41 @@ export default function Home() {
     )
   }
 
+  const progLength = activeClient.programme_length || 12
+  const currentWeek = getCurrentWeek(activeClient.start_date)
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <button onClick={() => setScreen('dashboard')} className="text-sm text-gray-500 mb-5 flex items-center gap-1 hover:text-gray-800">← All clients</button>
-      <div className="flex items-center gap-4 mb-6 pb-5 border-b border-gray-200">
+      <div className="flex items-center gap-4 mb-4 pb-4 border-b border-gray-200">
         <div className={`w-12 h-12 rounded-full flex items-center justify-center text-base font-medium flex-shrink-0 ${activeClient.colour}`}>{activeClient.initials}</div>
         <div className="flex-1">
           <div className="text-lg font-medium">{activeClient.name}</div>
-          <div className="text-sm text-gray-500 mt-0.5">{activeClient.meta}</div>
+          <div className="text-sm text-gray-500 mt-0.5">{activeClient.programme} · {progLength} weeks</div>
+          <div className="text-xs text-gray-400 mt-0.5">Currently on week {currentWeek} · started {activeClient.start_date ? new Date(activeClient.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'no start date set'}</div>
         </div>
-        <button onClick={advanceWeek} className="text-xs text-gray-400 border border-gray-200 rounded-lg px-3 py-1.5 hover:text-gray-600 hover:border-gray-300 transition-colors whitespace-nowrap">
-          Week {activeClient.week} → {activeClient.week + 1}
-        </button>
+        <button onClick={() => { setEditingProgramme(!editingProgramme); setProgrammeForm({ programme_length: activeClient.programme_length || 12, start_date: activeClient.start_date || '' }) }} className="text-xs text-gray-400 border border-gray-200 rounded-lg px-3 py-1.5 hover:text-gray-600 hover:border-gray-300 transition-colors">Edit</button>
       </div>
+
+      {editingProgramme && (
+        <div className="mb-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+          <div className="text-xs font-medium text-gray-600 mb-3">Programme settings</div>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <div className="text-xs text-gray-500 mb-1">Start date</div>
+              <input type="date" value={programmeForm.start_date} onChange={e => setProgrammeForm({...programmeForm, start_date: e.target.value})} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 mb-1">Length (weeks)</div>
+              <input type="number" value={programmeForm.programme_length} onChange={e => setProgrammeForm({...programmeForm, programme_length: e.target.value})} min="1" max="52" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none text-center bg-white" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={saveProgrammeSettings} className="flex-1 py-2 bg-gray-900 text-white text-xs font-medium rounded-lg hover:bg-gray-700">Save</button>
+            <button onClick={() => setEditingProgramme(false)} className="px-4 py-2 text-xs text-gray-500 border border-gray-200 rounded-lg bg-white">Cancel</button>
+          </div>
+        </div>
+      )}
 
       <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
         {[['plan','Training plan'],['editplan','Edit plan'],['history','Session history'],['diary','Food diary'],['messages','Messages']].map(([key, label]) => (
@@ -238,9 +300,18 @@ export default function Home() {
 
       {tab === 'plan' && (
         <div>
-          <div className="text-xs font-medium text-gray-500 mb-4">Week {activeClient.week} — prescribed plan</div>
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={() => changePlanWeek(planWeek - 1)} disabled={planWeek <= 1} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30 disabled:cursor-not-allowed">‹</button>
+            <div className="text-center">
+              <div className="text-sm font-medium">Week {planWeek} of {progLength}</div>
+              {planWeek === currentWeek && <div className="text-xs text-green-600 font-medium">Current week</div>}
+              {planWeek < currentWeek && <div className="text-xs text-gray-400">Past week</div>}
+              {planWeek > currentWeek && <div className="text-xs text-blue-500">Upcoming week</div>}
+            </div>
+            <button onClick={() => changePlanWeek(planWeek + 1)} disabled={planWeek >= progLength} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30 disabled:cursor-not-allowed">›</button>
+          </div>
           {planLoading ? <div className="text-sm text-gray-400 text-center py-8">Loading plan…</div>
-          : planSessions.length === 0 ? <div className="text-sm text-gray-400 text-center py-8">No plan yet — go to Edit plan to create one</div>
+          : planSessions.length === 0 ? <div className="text-sm text-gray-400 text-center py-8">No plan for week {planWeek} yet — go to Edit plan to create one</div>
           : (
             <div className="flex flex-col gap-1.5">
               {days.map(day => {
@@ -316,7 +387,11 @@ export default function Home() {
 
       {tab === 'editplan' && (
         <div>
-          <div className="text-xs font-medium text-gray-500 mb-4">Week {activeClient.week}</div>
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={() => { setPlanWeek(w => { const nw = Math.max(1, w-1); loadPlan(activeClient.id, nw); return nw })} } disabled={planWeek <= 1} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30">‹</button>
+            <div className="text-sm font-medium text-gray-700">Editing week {planWeek} of {progLength}</div>
+            <button onClick={() => { setPlanWeek(w => { const nw = Math.min(progLength, w+1); loadPlan(activeClient.id, nw); return nw })} } disabled={planWeek >= progLength} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30">›</button>
+          </div>
           {days.map(day => {
             const daySessions = planSessions.filter(s => s.day === day)
             return (
@@ -405,7 +480,7 @@ export default function Home() {
                       <span className="text-sm font-medium">{session.title}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400">{session.day}</span>
+                      <span className="text-xs text-gray-400">Wk {session.week} · {session.day}</span>
                       {session.log?.rpe && <span className={`text-xs font-medium px-2 py-0.5 rounded ${session.log.rpe <= 4 ? 'bg-green-100 text-green-700' : session.log.rpe <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>RPE {session.log.rpe}</span>}
                     </div>
                   </div>
