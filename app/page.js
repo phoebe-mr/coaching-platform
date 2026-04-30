@@ -28,37 +28,6 @@ function getCurrentWeek(startDate) {
   return Math.max(1, diffWeeks + 1)
 }
 
-function getWeekDates(startDate, week) {
-  if (!startDate) return `Week ${week}`
-  const start = new Date(startDate)
-  const weekStart = new Date(start.getTime() + (week - 1) * 7 * 24 * 60 * 60 * 1000)
-  const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)
-  return `${weekStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}–${weekEnd.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-}
-
-const ScaleDisplay = ({ value, max = 5 }) => {
-  const color = value <= 2 ? 'bg-red-100 text-red-700' : value === 3 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
-  return <span className={`text-xs font-medium px-2 py-0.5 rounded ${color}`}>{value}/{max}</span>
-}
-
-const intakeFields = [
-  { key: 'main_reason', label: 'Main reason for seeking support' },
-  { key: 'tried_before', label: 'What they\'ve tried before' },
-  { key: 'success_looks_like', label: 'What success looks like to them' },
-  { key: 'medical_conditions', label: 'Medical conditions' },
-  { key: 'medications', label: 'Medications and supplements' },
-  { key: 'current_symptoms', label: 'Current symptoms' },
-  { key: 'energy_level', label: 'Typical energy level (1–5)' },
-  { key: 'typical_eating', label: 'Typical day of eating' },
-  { key: 'meal_regularity', label: 'Meal regularity' },
-  { key: 'food_relationship', label: 'Relationship with food' },
-  { key: 'foods_avoided', label: 'Foods avoided' },
-  { key: 'stress_level', label: 'Typical stress level (1–5)' },
-  { key: 'sleep_quality', label: 'Sleep quality' },
-  { key: 'exercise_habits', label: 'Exercise' },
-  { key: 'anything_else', label: 'Anything else to note' },
-]
-
 export default function Home() {
   const [screen, setScreen] = useState('dashboard')
   const [activeClient, setActiveClient] = useState(null)
@@ -70,7 +39,7 @@ export default function Home() {
   const [messages, setMessages] = useState([])
   const [msgInput, setMsgInput] = useState('')
   const [unreadCount, setUnreadCount] = useState(0)
-  const [checkinsThisWeek, setCheckinsThisWeek] = useState(0)
+  const [diariesToday, setDiariesToday] = useState(0)
   const [planSessions, setPlanSessions] = useState([])
   const [planLoading, setPlanLoading] = useState(false)
   const [planWeek, setPlanWeek] = useState(1)
@@ -86,20 +55,19 @@ export default function Home() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [editingProgramme, setEditingProgramme] = useState(false)
   const [programmeForm, setProgrammeForm] = useState({ programme_length: 12, start_date: '' })
-  // Nutrition
-  const [nutritionTab, setNutritionTab] = useState('checkins')
-  const [nutWeek, setNutWeek] = useState(1)
-  const [intakeFormData, setIntakeFormData] = useState(null)
-  const [allCheckins, setAllCheckins] = useState([])
-  const [checkinsLoading, setCheckinsLoading] = useState(false)
-  const [habitForm, setHabitForm] = useState({ habit: '', why_note: '', confidence: 8 })
-  const [savingHabit, setSavingHabit] = useState(false)
-  const [habitSaved, setHabitSaved] = useState(false)
+  // Nutrition state
+  const [nutritionSubTab, setNutritionSubTab] = useState('habit')
   const [clientSymptoms, setClientSymptoms] = useState([])
-  const [newSymptomInput, setNewSymptomInput] = useState('')
-  const [callNotesText, setCallNotesText] = useState('')
-  const [callNotesSaved, setCallNotesSaved] = useState(false)
-  const [savingCallNotes, setSavingCallNotes] = useState(false)
+  const [newSymptom, setNewSymptom] = useState('')
+  const [weekHabit, setWeekHabit] = useState(null)
+  const [habitForm, setHabitForm] = useState({ habit_text: '', context_note: '' })
+  const [habitSaved, setHabitSaved] = useState(false)
+  const [checkins, setCheckins] = useState([])
+  const [expandedCheckin, setExpandedCheckin] = useState(null)
+  const [callNotes, setCallNotes] = useState([])
+  const [newCallNote, setNewCallNote] = useState({ note_date: new Date().toISOString().split('T')[0], notes: '' })
+  const [intakeData, setIntakeData] = useState(null)
+  const [nutritionLoaded, setNutritionLoaded] = useState(false)
 
   const colours = ['bg-blue-100 text-blue-700', 'bg-green-100 text-green-700', 'bg-pink-100 text-pink-700', 'bg-purple-100 text-purple-700', 'bg-amber-100 text-amber-700']
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -109,71 +77,70 @@ export default function Home() {
       if (!session) { window.location.href = '/login'; return }
       setAuthed(true)
       supabase.from('clients').select('*').then(({ data, error }) => {
-        if (!error) setClients(data.map((c, i) => ({
-          ...c, initials: c.name.split(' ').map(n => n[0]).join(''), colour: colours[i % colours.length],
-          currentWeek: getCurrentWeek(c.start_date),
-          meta: `Week ${getCurrentWeek(c.start_date)} of ${c.programme_length || 12} · ${c.programme}`, status: 'On track'
-        })))
+        if (!error) setClients(data.map((c, i) => ({ ...c, initials: c.name.split(' ').map(n => n[0]).join(''), colour: colours[i % colours.length], currentWeek: getCurrentWeek(c.start_date), meta: `Week ${getCurrentWeek(c.start_date)} of ${c.programme_length || 12} · ${c.programme}`, status: 'On track' })))
         setLoading(false)
       })
+      const today = new Date().toISOString().split('T')[0]
       supabase.from('messages').select('id', { count: 'exact' }).eq('from_coach', false).eq('read', false).then(({ count }) => setUnreadCount(count || 0))
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      supabase.from('weekly_checkins').select('id', { count: 'exact' }).gte('created_at', weekAgo).then(({ count }) => setCheckinsThisWeek(count || 0))
+      supabase.from('weekly_checkins').select('id', { count: 'exact' }).eq('week', 1).then() // placeholder
+      supabase.from('diary_entries').select('id', { count: 'exact' }).eq('date', today).then(({ count }) => setDiariesToday(count || 0))
     })
   }, [])
 
-  async function loadNutritionData(clientId) {
-    const { data: intake } = await supabase.from('intake_forms').select('*').eq('client_id', clientId).limit(1)
-    setIntakeFormData(intake?.[0] || null)
-    setCheckinsLoading(true)
-    const { data: cins } = await supabase.from('weekly_checkins').select('*').eq('client_id', clientId).order('week', { ascending: false })
-    setAllCheckins(cins || [])
-    setCheckinsLoading(false)
-    const { data: symptoms } = await supabase.from('client_symptoms').select('*').eq('client_id', clientId).eq('active', true).order('display_order')
-    setClientSymptoms(symptoms || [])
-  }
-
-  async function loadNutWeekData(clientId, week) {
-    const { data: habitData } = await supabase.from('client_habits').select('*').eq('client_id', clientId).eq('week', week).limit(1)
-    const habit = habitData?.[0] || null
-    if (habit) setHabitForm({ habit: habit.habit || '', why_note: habit.why_note || '', confidence: habit.confidence || 8 })
-    else setHabitForm({ habit: '', why_note: '', confidence: 8 })
-    const { data: notesData } = await supabase.from('call_notes').select('*').eq('client_id', clientId).eq('week', week).limit(1)
-    setCallNotesText(notesData?.[0]?.notes || '')
-    setCallNotesSaved(false)
-    setHabitSaved(false)
-  }
-
-  async function changeNutWeek(newWeek) {
-    if (!activeClient || newWeek < 1 || newWeek > (activeClient.programme_length || 12)) return
-    setNutWeek(newWeek)
-    await loadNutWeekData(activeClient.id, newWeek)
-  }
-
-  async function saveHabit() {
-    if (!habitForm.habit.trim()) return
-    setSavingHabit(true); setHabitSaved(false)
-    const { error } = await supabase.from('client_habits').upsert({ client_id: activeClient.id, week: nutWeek, habit: habitForm.habit, why_note: habitForm.why_note, confidence: habitForm.confidence }, { onConflict: 'client_id,week' })
-    if (!error) setHabitSaved(true)
-    setSavingHabit(false)
+  async function loadNutritionData(clientId, week) {
+    setNutritionLoaded(false)
+    const [symsRes, habitRes, checkinsRes, notesRes, intakeRes] = await Promise.all([
+      supabase.from('client_symptoms').select('*').eq('client_id', clientId).order('created_at'),
+      supabase.from('client_habits').select('*').eq('client_id', clientId).eq('week', week).maybeSingle(),
+      supabase.from('weekly_checkins').select('*').eq('client_id', clientId).order('week', { ascending: false }),
+      supabase.from('call_notes').select('*').eq('client_id', clientId).order('note_date', { ascending: false }),
+      supabase.from('intake_forms').select('*').eq('client_id', clientId).maybeSingle()
+    ])
+    if (symsRes.data) setClientSymptoms(symsRes.data)
+    if (habitRes.data) { setWeekHabit(habitRes.data); setHabitForm({ habit_text: habitRes.data.habit_text, context_note: habitRes.data.context_note || '' }) }
+    else { setWeekHabit(null); setHabitForm({ habit_text: '', context_note: '' }) }
+    if (checkinsRes.data) setCheckins(checkinsRes.data)
+    if (notesRes.data) setCallNotes(notesRes.data)
+    if (intakeRes.data) setIntakeData(intakeRes.data)
+    else setIntakeData(null)
+    setNutritionLoaded(true)
   }
 
   async function addSymptom() {
-    if (!newSymptomInput.trim()) return
-    const { data, error } = await supabase.from('client_symptoms').insert({ client_id: activeClient.id, symptom_name: newSymptomInput.trim(), display_order: clientSymptoms.length }).select()
-    if (!error && data?.[0]) { setClientSymptoms([...clientSymptoms, data[0]]); setNewSymptomInput('') }
+    if (!newSymptom.trim()) return
+    const { data, error } = await supabase.from('client_symptoms').insert({ client_id: activeClient.id, name: newSymptom.trim() }).select().single()
+    if (!error && data) { setClientSymptoms([...clientSymptoms, data]); setNewSymptom('') }
   }
 
   async function removeSymptom(id) {
-    await supabase.from('client_symptoms').update({ active: false }).eq('id', id)
+    await supabase.from('client_symptoms').delete().eq('id', id)
     setClientSymptoms(clientSymptoms.filter(s => s.id !== id))
   }
 
-  async function saveCallNotes() {
-    setSavingCallNotes(true); setCallNotesSaved(false)
-    const { error } = await supabase.from('call_notes').upsert({ client_id: activeClient.id, week: nutWeek, notes: callNotesText, updated_at: new Date().toISOString() }, { onConflict: 'client_id,week' })
-    if (!error) setCallNotesSaved(true)
-    setSavingCallNotes(false)
+  async function saveHabit() {
+    if (!habitForm.habit_text.trim()) return
+    setHabitSaved(false)
+    const currentWeek = getCurrentWeek(activeClient.start_date)
+    if (weekHabit) {
+      await supabase.from('client_habits').update({ habit_text: habitForm.habit_text, context_note: habitForm.context_note }).eq('id', weekHabit.id)
+      setWeekHabit({ ...weekHabit, ...habitForm })
+    } else {
+      const { data } = await supabase.from('client_habits').insert({ client_id: activeClient.id, week: currentWeek, ...habitForm }).select().single()
+      if (data) setWeekHabit(data)
+    }
+    setHabitSaved(true)
+    setTimeout(() => setHabitSaved(false), 2000)
+  }
+
+  async function saveCallNote() {
+    if (!newCallNote.notes.trim()) return
+    const { data, error } = await supabase.from('call_notes').insert({ client_id: activeClient.id, ...newCallNote }).select().single()
+    if (!error && data) { setCallNotes([data, ...callNotes]); setNewCallNote({ note_date: new Date().toISOString().split('T')[0], notes: '' }) }
+  }
+
+  async function deleteCallNote(id) {
+    await supabase.from('call_notes').delete().eq('id', id)
+    setCallNotes(callNotes.filter(n => n.id !== id))
   }
 
   async function loadPlan(clientId, week) {
@@ -193,7 +160,7 @@ export default function Home() {
       const { data: exercises } = await supabase.from('exercises').select('*').in('session_id', sessions.map(s => s.id)).order('order')
       const { data: logs } = await supabase.from('session_logs').select('*').in('session_id', sessions.map(s => s.id))
       const { data: weightLogs } = await supabase.from('exercise_logs').select('*').in('exercise_id', exercises?.map(e => e.id) || [])
-      setSessionHistory(sessions.map(s => ({ ...s, exercises: (exercises?.filter(e => e.session_id === s.id) || []).map(ex => ({ ...ex, weights: weightLogs?.filter(w => w.exercise_id === ex.id).sort((a, b) => a.set_number - b.set_number) || [] })), log: logs?.find(l => l.session_id === s.id) || null })))
+      setSessionHistory(sessions.map(s => ({ ...s, exercises: (exercises?.filter(e => e.session_id === s.id)||[]).map(ex => ({ ...ex, weights: weightLogs?.filter(w => w.exercise_id === ex.id).sort((a,b) => a.set_number - b.set_number)||[] })), log: logs?.find(l => l.session_id === s.id)||null })))
     } else { setSessionHistory([]) }
     setHistoryLoading(false)
   }
@@ -201,9 +168,8 @@ export default function Home() {
   async function openClient(client) {
     const currentWeek = getCurrentWeek(client.start_date)
     setActiveClient(client); setScreen('client'); setTab('plan'); setExpandedDay(null)
-    setPlanWeek(currentWeek); setNutWeek(currentWeek); setNutritionTab('checkins')
+    setPlanWeek(currentWeek); setNutritionLoaded(false)
     loadPlan(client.id, currentWeek); loadSessionHistory(client.id)
-    loadNutritionData(client.id); loadNutWeekData(client.id, currentWeek)
     const { data: msgs } = await supabase.from('messages').select('*').eq('client_id', client.id).order('created_at', { ascending: true })
     if (msgs) {
       setMessages(msgs.map(m => ({ from: m.from_coach ? 'coach' : 'client', text: m.content, time: new Date(m.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) })))
@@ -213,7 +179,8 @@ export default function Home() {
   }
 
   function changePlanWeek(newWeek) {
-    if (newWeek < 1 || newWeek > (activeClient.programme_length || 12)) return
+    const progLength = activeClient.programme_length || 12
+    if (newWeek < 1 || newWeek > progLength) return
     setPlanWeek(newWeek); loadPlan(activeClient.id, newWeek); setExpandedDay(null)
   }
 
@@ -221,8 +188,7 @@ export default function Home() {
     await supabase.from('clients').update({ programme_length: parseInt(programmeForm.programme_length), start_date: programmeForm.start_date }).eq('id', activeClient.id)
     const updated = { ...activeClient, programme_length: parseInt(programmeForm.programme_length), start_date: programmeForm.start_date, currentWeek: getCurrentWeek(programmeForm.start_date), meta: `Week ${getCurrentWeek(programmeForm.start_date)} of ${programmeForm.programme_length} · ${activeClient.programme}` }
     setActiveClient(updated); setClients(clients.map(c => c.id === activeClient.id ? updated : c))
-    setEditingProgramme(false); setPlanWeek(getCurrentWeek(programmeForm.start_date))
-    loadPlan(activeClient.id, getCurrentWeek(programmeForm.start_date))
+    setEditingProgramme(false); setPlanWeek(getCurrentWeek(programmeForm.start_date)); loadPlan(activeClient.id, getCurrentWeek(programmeForm.start_date))
   }
 
   async function addClient() {
@@ -231,17 +197,16 @@ export default function Home() {
     const { data: authData, error: authError } = await supabase.auth.signUp({ email: newClientForm.email, password: newClientForm.password })
     if (authError) { setAddClientError(authError.message); setAddingClient(false); return }
     const startDate = newClientForm.start_date || new Date().toISOString().split('T')[0]
-    const { data: clientData, error: clientError } = await supabase.from('clients').insert({ name: newClientForm.name, email: newClientForm.email, programme: newClientForm.programme || 'General programme', week: 1, start_date: startDate, programme_length: parseInt(newClientForm.programme_length) || 12, user_id: authData.user.id }).select()
+    const { data: clientData, error: clientError } = await supabase.from('clients').insert({ name: newClientForm.name, email: newClientForm.email, programme: newClientForm.programme || 'General programme', week: 1, start_date: startDate, programme_length: parseInt(newClientForm.programme_length) || 12, user_id: authData.user.id }).select().single()
     if (clientError) { setAddClientError(clientError.message); setAddingClient(false); return }
-    const c = clientData[0]
-    setClients([...clients, { ...c, initials: c.name.split(' ').map(n => n[0]).join(''), colour: colours[clients.length % colours.length], currentWeek: getCurrentWeek(startDate), meta: `Week ${getCurrentWeek(startDate)} of ${c.programme_length} · ${c.programme}`, status: 'On track' }])
-    setShowAddClient(false); setNewClientForm({ name: '', email: '', password: '', programme: '', start_date: '', programme_length: 12 }); setAddingClient(false)
+    const newClient = { ...clientData, initials: clientData.name.split(' ').map(n => n[0]).join(''), colour: colours[clients.length % colours.length], currentWeek: getCurrentWeek(startDate), meta: `Week ${getCurrentWeek(startDate)} of ${clientData.programme_length} · ${clientData.programme}`, status: 'On track' }
+    setClients([...clients, newClient]); setShowAddClient(false); setNewClientForm({ name: '', email: '', password: '', programme: '', start_date: '', programme_length: 12 }); setAddingClient(false)
   }
 
   async function addSession() {
     if (!newSessionForm.title.trim()) return
-    const { data, error } = await supabase.from('sessions').insert({ client_id: activeClient.id, week: planWeek, day: addingSessionDay, type: newSessionForm.type, title: newSessionForm.title, goal: newSessionForm.goal, prescribed: true }).select()
-    if (!error && data?.[0]) { setPlanSessions([...planSessions, { ...data[0], exercises: [] }]); setAddingSessionDay(null); setNewSessionForm({ type: 'strength', title: '', goal: '' }) }
+    const { data, error } = await supabase.from('sessions').insert({ client_id: activeClient.id, week: planWeek, day: addingSessionDay, type: newSessionForm.type, title: newSessionForm.title, goal: newSessionForm.goal, prescribed: true }).select().single()
+    if (!error && data) { setPlanSessions([...planSessions, { ...data, exercises: [] }]); setAddingSessionDay(null); setNewSessionForm({ type: 'strength', title: '', goal: '' }) }
   }
 
   async function deleteSession(sessionId) {
@@ -253,8 +218,8 @@ export default function Home() {
   async function addExercise(sessionId) {
     if (!newExerciseForm.name.trim()) return
     const session = planSessions.find(s => s.id === sessionId)
-    const { data, error } = await supabase.from('exercises').insert({ session_id: sessionId, name: newExerciseForm.name, sets: parseInt(newExerciseForm.sets) || 3, reps: parseInt(newExerciseForm.reps) || 10, tempo: newExerciseForm.tempo || null, notes: newExerciseForm.notes || null, superset: newExerciseForm.superset || null, order: session.exercises.length }).select()
-    if (!error && data?.[0]) { setPlanSessions(planSessions.map(s => s.id === sessionId ? { ...s, exercises: [...s.exercises, data[0]] } : s)); setAddingExerciseSession(null); setNewExerciseForm({ name: '', sets: 3, reps: 10, tempo: '', notes: '', superset: '' }) }
+    const { data, error } = await supabase.from('exercises').insert({ session_id: sessionId, name: newExerciseForm.name, sets: parseInt(newExerciseForm.sets)||3, reps: parseInt(newExerciseForm.reps)||10, tempo: newExerciseForm.tempo||null, notes: newExerciseForm.notes||null, superset: newExerciseForm.superset||null, order: session.exercises.length }).select().single()
+    if (!error && data) { setPlanSessions(planSessions.map(s => s.id === sessionId ? { ...s, exercises: [...s.exercises, data] } : s)); setAddingExerciseSession(null); setNewExerciseForm({ name: '', sets: 3, reps: 10, tempo: '', notes: '', superset: '' }) }
   }
 
   async function deleteExercise(sessionId, exerciseId) {
@@ -286,7 +251,7 @@ export default function Home() {
           </div>
         </div>
         <div className="grid grid-cols-3 gap-3 mb-8">
-          {[['Active clients', clients.length.toString()], ['Check-ins this week', checkinsThisWeek.toString()], ['Unread messages', unreadCount.toString()]].map(([label, value]) => (
+          {[['Active clients', clients.length.toString()], ['Check-ins this week', checkins.length?.toString() || '0'], ['Unread messages', unreadCount.toString()]].map(([label, value]) => (
             <div key={label} className="bg-gray-50 rounded-lg p-4">
               <div className="text-xs text-gray-500 mb-1">{label}</div>
               <div className="text-2xl font-medium">{value}</div>
@@ -349,7 +314,7 @@ export default function Home() {
         <div className="flex-1">
           <div className="text-lg font-medium">{activeClient.name}</div>
           <div className="text-sm text-gray-500 mt-0.5">{activeClient.programme} · {progLength} weeks</div>
-          <div className="text-xs text-gray-400 mt-0.5">Currently week {currentWeek} · started {activeClient.start_date ? new Date(activeClient.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'no start date'}</div>
+          <div className="text-xs text-gray-400 mt-0.5">Week {currentWeek} · {activeClient.start_date ? `started ${new Date(activeClient.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'no start date set'}</div>
         </div>
         <button onClick={() => { setEditingProgramme(!editingProgramme); setProgrammeForm({ programme_length: activeClient.programme_length || 12, start_date: activeClient.start_date || '' }) }} className="text-xs text-gray-400 border border-gray-200 rounded-lg px-3 py-1.5 hover:text-gray-600 hover:border-gray-300 transition-colors">Edit</button>
       </div>
@@ -368,23 +333,32 @@ export default function Home() {
         </div>
       )}
 
+      {/* Intake form link */}
+      <div className="mb-4 p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-between">
+        <div>
+          <div className="text-xs font-medium text-amber-700">Intake form</div>
+          <div className="text-xs text-amber-600 mt-0.5">{intakeData ? 'Submitted ✓' : 'Not yet submitted'}</div>
+        </div>
+        <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/intake?email=${activeClient.email}`); }} className="text-xs text-amber-700 border border-amber-200 rounded-lg px-2 py-1 hover:bg-amber-100">Copy link</button>
+      </div>
+
       <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
         {[['plan','Training plan'],['editplan','Edit plan'],['history','Session history'],['nutrition','Nutrition'],['messages','Messages']].map(([key, label]) => (
-          <button key={key} onClick={() => setTab(key)} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${tab === key ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>{label}</button>
+          <button key={key} onClick={() => { setTab(key); if (key === 'nutrition' && !nutritionLoaded) loadNutritionData(activeClient.id, currentWeek) }} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${tab === key ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>{label}</button>
         ))}
       </div>
 
       {tab === 'plan' && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <button onClick={() => changePlanWeek(planWeek - 1)} disabled={planWeek <= 1} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30">‹</button>
+            <button onClick={() => changePlanWeek(planWeek-1)} disabled={planWeek<=1} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30">‹</button>
             <div className="text-center">
               <div className="text-sm font-medium">Week {planWeek} of {progLength}</div>
               {planWeek === currentWeek && <div className="text-xs text-green-600 font-medium">Current week</div>}
               {planWeek < currentWeek && <div className="text-xs text-gray-400">Past week</div>}
-              {planWeek > currentWeek && <div className="text-xs text-blue-500">Upcoming</div>}
+              {planWeek > currentWeek && <div className="text-xs text-blue-500">Upcoming week</div>}
             </div>
-            <button onClick={() => changePlanWeek(planWeek + 1)} disabled={planWeek >= progLength} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30">›</button>
+            <button onClick={() => changePlanWeek(planWeek+1)} disabled={planWeek>=progLength} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30">›</button>
           </div>
           {planLoading ? <div className="text-sm text-gray-400 text-center py-8">Loading plan…</div>
           : planSessions.length === 0 ? <div className="text-sm text-gray-400 text-center py-8">No plan for week {planWeek} yet</div>
@@ -417,12 +391,20 @@ export default function Home() {
                           <div className="border-t border-gray-100">
                             {daySessions.map((session, si) => (
                               <div key={si} className={`p-4 ${si > 0 ? 'border-t border-gray-100' : ''}`}>
-                                {session.goal && <div className="mb-3 p-3 bg-amber-50 rounded-lg border border-amber-100"><div className="text-xs font-medium text-amber-700 mb-1">Session goal</div><div className="text-sm text-amber-900">{session.goal}</div></div>}
+                                {session.goal && (
+                                  <div className="mb-3 p-3 bg-amber-50 rounded-lg border border-amber-100">
+                                    <div className="text-xs font-medium text-amber-700 mb-1">Session goal</div>
+                                    <div className="text-sm text-amber-900">{session.goal}</div>
+                                  </div>
+                                )}
                                 <div className="flex flex-col gap-2">
                                   {session.exercises.map((ex, exIdx) => (
                                     <div key={exIdx} className="bg-gray-50 rounded-lg p-3">
                                       <div className="flex items-start justify-between gap-2">
-                                        <div><span className="text-sm font-medium">{ex.name}</span>{ex.superset && <span className="text-xs text-purple-600 ml-2 font-medium">SS {ex.superset}</span>}</div>
+                                        <div>
+                                          <span className="text-sm font-medium">{ex.name}</span>
+                                          {ex.superset && <span className="text-xs text-purple-600 ml-2 font-medium">SS {ex.superset}</span>}
+                                        </div>
                                         <div className="flex gap-1.5 text-xs text-gray-500 flex-shrink-0">
                                           <span className="bg-white border border-gray-200 px-2 py-0.5 rounded">{ex.sets} sets</span>
                                           <span className="bg-white border border-gray-200 px-2 py-0.5 rounded">{ex.reps} reps</span>
@@ -450,9 +432,9 @@ export default function Home() {
       {tab === 'editplan' && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <button onClick={() => { const nw = Math.max(1, planWeek-1); setPlanWeek(nw); loadPlan(activeClient.id, nw) }} disabled={planWeek <= 1} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30">‹</button>
+            <button onClick={() => changePlanWeek(planWeek-1)} disabled={planWeek<=1} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30">‹</button>
             <div className="text-sm font-medium text-gray-700">Editing week {planWeek} of {progLength}</div>
-            <button onClick={() => { const nw = Math.min(progLength, planWeek+1); setPlanWeek(nw); loadPlan(activeClient.id, nw) }} disabled={planWeek >= progLength} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30">›</button>
+            <button onClick={() => changePlanWeek(planWeek+1)} disabled={planWeek>=progLength} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30">›</button>
           </div>
           {days.map(day => {
             const daySessions = planSessions.filter(s => s.day === day)
@@ -543,17 +525,22 @@ export default function Home() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400">Wk {session.week} · {session.day}</span>
-                      {session.log?.rpe && <span className={`text-xs font-medium px-2 py-0.5 rounded ${session.log.rpe <= 4 ? 'bg-green-100 text-green-700' : session.log.rpe <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>RPE {session.log.rpe}</span>}
+                      {session.log?.rpe && <span className={`text-xs font-medium px-2 py-0.5 rounded ${session.log.rpe<=4 ? 'bg-green-100 text-green-700' : session.log.rpe<=7 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>RPE {session.log.rpe}</span>}
                     </div>
                   </div>
                   <div className="flex flex-col gap-1.5">
                     {session.exercises.map((ex, exIdx) => (
                       <div key={exIdx} className="bg-gray-50 rounded-lg px-3 py-2">
-                        <div className="flex items-center justify-between"><span className="text-sm font-medium">{ex.name}</span><span className="text-xs text-gray-400">{ex.sets}×{ex.reps}</span></div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">{ex.name}</span>
+                          <span className="text-xs text-gray-400">{ex.sets}×{ex.reps}</span>
+                        </div>
                         {ex.weights.length > 0 && (
                           <div className="flex gap-2 mt-1.5 flex-wrap">
                             {ex.weights.map((w, wi) => (
-                              <div key={wi} className="text-xs bg-white border border-gray-200 rounded px-2 py-0.5"><span className="text-gray-400">S{w.set_number} </span><span className="font-medium">{w.weight}kg</span></div>
+                              <div key={wi} className="text-xs bg-white border border-gray-200 rounded px-2 py-0.5">
+                                <span className="text-gray-400">S{w.set_number} </span><span className="font-medium">{w.weight}kg</span>
+                              </div>
                             ))}
                           </div>
                         )}
@@ -570,162 +557,205 @@ export default function Home() {
 
       {tab === 'nutrition' && (
         <div>
-          <div className="flex gap-2 mb-5 flex-wrap">
-            {[['checkins','Check-ins'],['habit','Habit'],['symptoms','Symptoms'],['intake','Intake form'],['notes','Call notes']].map(([key, label]) => (
-              <button key={key} onClick={() => setNutritionTab(key)} className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${nutritionTab === key ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}>{label}</button>
+          {/* Sub-tabs */}
+          <div className="flex gap-1 mb-5 overflow-x-auto">
+            {[['habit','Habit'],['symptoms','Symptoms'],['checkins','Check-ins'],['notes','Call notes'],['intake','Intake']].map(([key, label]) => (
+              <button key={key} onClick={() => setNutritionSubTab(key)} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${nutritionSubTab === key ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{label}</button>
             ))}
           </div>
 
-          {nutritionTab === 'checkins' && (
-            <div>
-              <div className="text-xs font-medium text-gray-500 mb-4">All check-ins — most recent first</div>
-              {checkinsLoading ? <div className="text-sm text-gray-400 text-center py-8">Loading…</div>
-              : allCheckins.length === 0 ? <div className="text-sm text-gray-400 text-center py-8">No check-ins yet — they'll appear here once {activeClient.name.split(' ')[0]} starts checking in</div>
-              : allCheckins.map((ci, i) => (
-                <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <div className="text-sm font-medium">Week {ci.week}</div>
-                      <div className="text-xs text-gray-400">{getWeekDates(activeClient.start_date, ci.week)}</div>
-                    </div>
-                    {ci.habit_completion && (
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded ${ci.habit_completion === 'yes' ? 'bg-green-100 text-green-700' : ci.habit_completion === 'mostly' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
-                        {ci.habit_completion === 'yes' ? '✓ Nailed it' : ci.habit_completion === 'mostly' ? '~ Mostly' : '✗ Struggled'}
-                      </span>
-                    )}
-                  </div>
-                  {(ci.energy_morning || ci.energy_afternoon || ci.energy_evening || ci.mood || ci.sleep_quality) && (
-                    <div className="flex flex-wrap gap-2 mb-3 pb-3 border-b border-gray-100">
-                      {ci.energy_morning && <div className="text-xs text-gray-500">☀️ Morning <span className="font-medium text-gray-800">{ci.energy_morning}/5</span></div>}
-                      {ci.energy_afternoon && <div className="text-xs text-gray-500">🌤 Afternoon <span className="font-medium text-gray-800">{ci.energy_afternoon}/5</span></div>}
-                      {ci.energy_evening && <div className="text-xs text-gray-500">🌙 Evening <span className="font-medium text-gray-800">{ci.energy_evening}/5</span></div>}
-                      {ci.mood && <div className="text-xs text-gray-500">Mood <span className="font-medium text-gray-800">{ci.mood}/5</span></div>}
-                      {ci.sleep_quality && <div className="text-xs text-gray-500">Sleep <span className="font-medium text-gray-800">{ci.sleep_quality}/5</span></div>}
-                    </div>
-                  )}
-                  {ci.symptom_scores && Object.keys(ci.symptom_scores).length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-3 pb-3 border-b border-gray-100">
-                      {Object.entries(ci.symptom_scores).map(([name, score]) => (
-                        <span key={name} className="text-xs px-2 py-0.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-600">{name}: <span className="font-medium">{score}/5</span></span>
-                      ))}
-                    </div>
-                  )}
-                  {(ci.breakfast || ci.lunch || ci.dinner || ci.snacks) && (
-                    <div className="flex flex-col gap-1 mb-3 pb-3 border-b border-gray-100">
-                      {[['Breakfast', ci.breakfast], ['Lunch', ci.lunch], ['Dinner', ci.dinner], ['Snacks', ci.snacks]].filter(([, v]) => v).map(([label, val]) => (
-                        <div key={label} className="flex gap-2">
-                          <span className="text-xs font-medium text-gray-400 w-16 flex-shrink-0 pt-0.5">{label}</span>
-                          <span className="text-sm text-gray-700">{val}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex flex-col gap-2">
-                    {ci.habit_notes && <div><span className="text-xs font-medium text-gray-500">Habit notes: </span><span className="text-xs text-gray-700">{ci.habit_notes}</span></div>}
-                    {ci.went_well && <div><span className="text-xs font-medium text-gray-500">Went well: </span><span className="text-xs text-gray-700">{ci.went_well}</span></div>}
-                    {ci.was_hard && <div><span className="text-xs font-medium text-gray-500">Was hard: </span><span className="text-xs text-gray-700">{ci.was_hard}</span></div>}
-                    {ci.want_to_discuss && <div className="bg-amber-50 rounded-lg p-2 border border-amber-100"><span className="text-xs font-medium text-amber-700">Wants to discuss: </span><span className="text-xs text-amber-900">{ci.want_to_discuss}</span></div>}
-                    {ci.new_symptoms_notes && <div className="bg-red-50 rounded-lg p-2 border border-red-100"><span className="text-xs font-medium text-red-700">New symptoms: </span><span className="text-xs text-red-900">{ci.new_symptoms_notes}</span></div>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          {!nutritionLoaded && <div className="text-sm text-gray-400 text-center py-8">Loading…</div>}
 
-          {nutritionTab === 'habit' && (
+          {nutritionLoaded && nutritionSubTab === 'habit' && (
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <button onClick={() => changeNutWeek(nutWeek - 1)} disabled={nutWeek <= 1} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30">‹</button>
-                <div className="text-sm font-medium text-gray-700">Week {nutWeek} habit</div>
-                <button onClick={() => changeNutWeek(nutWeek + 1)} disabled={nutWeek >= progLength} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30">›</button>
-              </div>
+              <div className="text-xs text-gray-500 mb-4">Setting habit for <strong>week {currentWeek}</strong> (current week)</div>
               <div className="flex flex-col gap-3">
                 <div>
-                  <div className="text-xs font-medium text-gray-600 mb-1.5">The habit</div>
-                  <input value={habitForm.habit} onChange={e => setHabitForm({...habitForm, habit: e.target.value})} placeholder="e.g. Eat a proper lunch before 1pm every weekday" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 outline-none focus:border-gray-400 bg-white" />
+                  <div className="text-xs font-medium text-gray-600 mb-1.5">Habit</div>
+                  <input value={habitForm.habit_text} onChange={e => setHabitForm({...habitForm, habit_text: e.target.value})} placeholder="e.g. Eat lunch before 1pm every day this week" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 outline-none focus:border-gray-400" />
                 </div>
                 <div>
-                  <div className="text-xs font-medium text-gray-600 mb-1.5">Why you've set this habit <span className="font-normal text-gray-400">(shown to {activeClient.name.split(' ')[0]})</span></div>
-                  <textarea value={habitForm.why_note} onChange={e => setHabitForm({...habitForm, why_note: e.target.value})} placeholder="A short explanation of why this matters for them right now..." rows={3} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 outline-none focus:border-gray-400 bg-white resize-none" />
+                  <div className="text-xs font-medium text-gray-600 mb-1.5">Context note for client</div>
+                  <textarea value={habitForm.context_note} onChange={e => setHabitForm({...habitForm, context_note: e.target.value})} placeholder="Why are we working on this? What should they keep in mind?" rows={3} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-gray-400 resize-none" />
                 </div>
-                <div>
-                  <div className="text-xs font-medium text-gray-600 mb-2">How confident are you they can do this? ({habitForm.confidence}/10)</div>
-                  <div className="text-xs text-gray-400 mb-2">Aim for 9–10 — if lower, make the habit smaller</div>
-                  <div className="flex gap-1.5">
-                    {[1,2,3,4,5,6,7,8,9,10].map(n => (
-                      <button key={n} onClick={() => setHabitForm({...habitForm, confidence: n})} className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${habitForm.confidence === n ? (n >= 9 ? 'bg-green-100 text-green-700 border-green-300' : n >= 7 ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-red-100 text-red-700 border-red-300') : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}>{n}</button>
-                    ))}
-                  </div>
-                </div>
-                {habitSaved ? (
-                  <div className="text-sm text-green-600 font-medium text-center py-1">Habit saved ✓</div>
-                ) : (
-                  <button onClick={saveHabit} disabled={savingHabit || !habitForm.habit.trim()} className="w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors">{savingHabit ? 'Saving…' : 'Save habit'}</button>
-                )}
+                <button onClick={saveHabit} className="py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors">
+                  {habitSaved ? 'Saved ✓' : weekHabit ? 'Update habit' : 'Set habit'}
+                </button>
               </div>
             </div>
           )}
 
-          {nutritionTab === 'symptoms' && (
+          {nutritionLoaded && nutritionSubTab === 'symptoms' && (
             <div>
-              <div className="text-xs font-medium text-gray-500 mb-1">Symptoms to track for {activeClient.name.split(' ')[0]}</div>
-              <div className="text-xs text-gray-400 mb-4">These will appear as 1–5 rating questions in their weekly check-in</div>
-              {clientSymptoms.length === 0 ? (
-                <div className="text-sm text-gray-400 text-center py-6 bg-gray-50 rounded-xl border border-gray-100 mb-4">No symptoms set yet — add some below</div>
-              ) : (
-                <div className="flex flex-col gap-1.5 mb-4">
-                  {clientSymptoms.map(s => (
-                    <div key={s.id} className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-3 py-2.5">
-                      <span className="text-sm text-gray-700">{s.symptom_name}</span>
-                      <button onClick={() => removeSymptom(s.id)} className="text-gray-400 hover:text-red-500 text-lg leading-none ml-2">×</button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="text-xs text-gray-500 mb-4">These symptoms appear in the client's weekly check-in. Start blank and add what's relevant to this client.</div>
+              {clientSymptoms.length === 0 && <div className="text-sm text-gray-400 mb-4">No symptoms added yet</div>}
+              <div className="flex flex-col gap-2 mb-4">
+                {clientSymptoms.map(sym => (
+                  <div key={sym.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2.5">
+                    <span className="text-sm">{sym.name}</span>
+                    <button onClick={() => removeSymptom(sym.id)} className="text-gray-400 hover:text-red-500 text-lg leading-none">×</button>
+                  </div>
+                ))}
+              </div>
               <div className="flex gap-2">
-                <input value={newSymptomInput} onChange={e => setNewSymptomInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addSymptom()} placeholder="Add symptom e.g. Hot flushes, Brain fog, Bloating..." className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-gray-400 bg-white" />
+                <input value={newSymptom} onChange={e => setNewSymptom(e.target.value)} onKeyDown={e => e.key === 'Enter' && addSymptom()} placeholder="e.g. Hot flushes, Brain fog, Bloating…" className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-gray-400" />
                 <button onClick={addSymptom} className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700">Add</button>
               </div>
             </div>
           )}
 
-          {nutritionTab === 'intake' && (
+          {nutritionLoaded && nutritionSubTab === 'checkins' && (
             <div>
-              {!intakeFormData ? (
-                <div className="text-sm text-gray-400 text-center py-8 bg-gray-50 rounded-xl border border-gray-100">
-                  No intake form submitted yet — send {activeClient.name.split(' ')[0]} a link to fill it in
-                </div>
-              ) : (
-                <div>
-                  <div className="text-xs text-gray-400 mb-4">Submitted {new Date(intakeFormData.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
-                  <div className="flex flex-col gap-4">
-                    {intakeFields.map(field => (
-                      intakeFormData[field.key] ? (
-                        <div key={field.key}>
-                          <div className="text-xs font-medium text-gray-500 mb-1">{field.label}</div>
-                          <div className="text-sm text-gray-800 bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">{intakeFormData[field.key]}</div>
+              {checkins.length === 0 ? <div className="text-sm text-gray-400 text-center py-8">No check-ins submitted yet</div>
+              : (
+                <div className="flex flex-col gap-3">
+                  {checkins.map((c, i) => (
+                    <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                      <button onClick={() => setExpandedCheckin(expandedCheckin === i ? null : i)} className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors">
+                        <div>
+                          <div className="text-sm font-medium">Week {c.week}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">{new Date(c.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
                         </div>
-                      ) : null
-                    ))}
-                  </div>
+                        <div className="flex items-center gap-2">
+                          {c.habit_completion && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{c.habit_completion}</span>}
+                          <span className="text-gray-400 text-xs">{expandedCheckin === i ? '▲' : '▼'}</span>
+                        </div>
+                      </button>
+                      {expandedCheckin === i && (
+                        <div className="border-t border-gray-100 p-4 flex flex-col gap-4">
+                          {/* Wellbeing */}
+                          <div>
+                            <div className="text-xs font-medium text-gray-500 mb-2">Wellbeing</div>
+                            <div className="grid grid-cols-3 gap-2 mb-2">
+                              {[['energy_morning','Morning energy'],['energy_afternoon','Afternoon energy'],['energy_evening','Evening energy']].map(([key, label]) => (
+                                <div key={key} className="bg-gray-50 rounded-lg p-2 text-center">
+                                  <div className="text-xs text-gray-400 mb-0.5">{label.replace(' energy','')}</div>
+                                  <div className="text-lg font-medium">{c[key] || '—'}</div>
+                                  <div className="text-xs text-gray-400">energy</div>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[['mood_rating','Mood'],['sleep_rating','Sleep']].map(([key, label]) => (
+                                <div key={key} className="bg-gray-50 rounded-lg p-2 text-center">
+                                  <div className="text-xs text-gray-400 mb-0.5">{label}</div>
+                                  <div className="text-lg font-medium">{c[key] || '—'}<span className="text-xs text-gray-400">/5</span></div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Symptoms */}
+                          {clientSymptoms.length > 0 && c.symptom_scores && Object.keys(c.symptom_scores).length > 0 && (
+                            <div>
+                              <div className="text-xs font-medium text-gray-500 mb-2">Symptoms</div>
+                              <div className="flex flex-col gap-1.5">
+                                {clientSymptoms.map(sym => (
+                                  <div key={sym.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-1.5">
+                                    <span className="text-xs text-gray-600">{sym.name}</span>
+                                    <span className="text-sm font-medium">{c.symptom_scores[sym.id] || '—'}<span className="text-xs text-gray-400">/5</span></span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {/* Eating */}
+                          {(c.breakfast_patterns || c.lunch_patterns || c.dinner_patterns || c.snack_patterns) && (
+                            <div>
+                              <div className="text-xs font-medium text-gray-500 mb-2">Eating patterns</div>
+                              {[['Breakfast', c.breakfast_patterns], ['Lunch', c.lunch_patterns], ['Dinner', c.dinner_patterns], ['Snacks', c.snack_patterns]].filter(([,v]) => v).map(([label, val]) => (
+                                <div key={label} className="mb-2">
+                                  <div className="text-xs text-gray-400 mb-0.5">{label}</div>
+                                  <div className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">{val}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {/* Habit */}
+                          {c.habit_completion && (
+                            <div>
+                              <div className="text-xs font-medium text-gray-500 mb-2">Habit</div>
+                              <div className="text-sm font-medium text-gray-700 mb-1">{c.habit_completion}</div>
+                              {c.habit_reflection && <div className="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2">{c.habit_reflection}</div>}
+                            </div>
+                          )}
+                          {/* Reflection */}
+                          {[['What went well', c.went_well], ['What was hard', c.was_hard], ['Anything new', c.anything_new]].filter(([,v]) => v).map(([label, val]) => (
+                            <div key={label}>
+                              <div className="text-xs font-medium text-gray-500 mb-1">{label}</div>
+                              <div className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">{val}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           )}
 
-          {nutritionTab === 'notes' && (
+          {nutritionLoaded && nutritionSubTab === 'notes' && (
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <button onClick={() => changeNutWeek(nutWeek - 1)} disabled={nutWeek <= 1} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30">‹</button>
-                <div className="text-sm font-medium text-gray-700">Week {nutWeek} call notes</div>
-                <button onClick={() => changeNutWeek(nutWeek + 1)} disabled={nutWeek >= progLength} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30">›</button>
+              <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
+                <div className="text-xs font-medium text-gray-600 mb-3">Add call note</div>
+                <div className="flex flex-col gap-2">
+                  <div><div className="text-xs text-gray-500 mb-1">Date</div><input type="date" value={newCallNote.note_date} onChange={e => setNewCallNote({...newCallNote, note_date: e.target.value})} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white" /></div>
+                  <textarea value={newCallNote.notes} onChange={e => setNewCallNote({...newCallNote, notes: e.target.value})} placeholder="What did you discuss? What did you agree? Key observations…" rows={4} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-gray-400 resize-none" />
+                  <button onClick={saveCallNote} className="py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700">Save note</button>
+                </div>
               </div>
-              <div className="text-xs text-gray-400 mb-2">Private — only visible to you</div>
-              <textarea value={callNotesText} onChange={e => { setCallNotesText(e.target.value); setCallNotesSaved(false) }} placeholder={`Notes from your week ${nutWeek} session with ${activeClient.name.split(' ')[0]}…\n\nWhat did you discuss? What did you agree? What to watch next week?`} rows={10} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 outline-none focus:border-gray-400 resize-none bg-white mb-3" />
-              {callNotesSaved ? (
-                <div className="text-sm text-green-600 font-medium text-center py-1">Notes saved ✓</div>
+              {callNotes.length === 0 ? <div className="text-sm text-gray-400 text-center py-4">No call notes yet</div>
+              : (
+                <div className="flex flex-col gap-3">
+                  {callNotes.map((note, i) => (
+                    <div key={i} className="bg-white border border-gray-200 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-medium text-gray-500">{new Date(note.note_date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                        <button onClick={() => deleteCallNote(note.id)} className="text-xs text-gray-400 hover:text-red-500">Delete</button>
+                      </div>
+                      <div className="text-sm text-gray-700 whitespace-pre-wrap">{note.notes}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {nutritionLoaded && nutritionSubTab === 'intake' && (
+            <div>
+              {!intakeData ? (
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+                  <div className="text-sm font-medium text-amber-700 mb-2">Intake form not yet submitted</div>
+                  <div className="text-xs text-amber-600 mb-3">Send this link to {activeClient.name.split(' ')[0]} before their first session:</div>
+                  <div className="bg-white border border-amber-200 rounded-lg px-3 py-2 text-xs text-gray-600 font-mono break-all mb-3">{typeof window !== 'undefined' ? `${window.location.origin}/intake?email=${activeClient.email}` : `/intake?email=${activeClient.email}`}</div>
+                  <button onClick={() => { if (typeof window !== 'undefined') navigator.clipboard.writeText(`${window.location.origin}/intake?email=${activeClient.email}`) }} className="text-xs bg-amber-700 text-white px-3 py-1.5 rounded-lg hover:bg-amber-800">Copy link</button>
+                </div>
               ) : (
-                <button onClick={saveCallNotes} disabled={savingCallNotes} className="w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors">{savingCallNotes ? 'Saving…' : 'Save notes'}</button>
+                <div className="flex flex-col gap-4">
+                  <div className="text-xs text-green-600 font-medium">Submitted {new Date(intakeData.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                  {[
+                    { label: 'Reason for seeking support', value: intakeData.reason_for_seeking },
+                    { label: 'What they\'ve tried before', value: intakeData.tried_before },
+                    { label: 'What success looks like', value: intakeData.success_looks_like },
+                    { label: 'Medical conditions', value: intakeData.medical_conditions },
+                    { label: 'Medications & supplements', value: intakeData.medications_supplements },
+                    { label: 'Hormonal stage', value: intakeData.hormonal_stage },
+                    { label: 'Current symptoms', value: intakeData.current_symptoms },
+                    { label: 'Typical eating', value: intakeData.typical_eating },
+                    { label: 'Meal regularity', value: intakeData.meal_regularity },
+                    { label: 'Relationship with food', value: intakeData.relationship_with_food },
+                    { label: 'Foods avoided', value: intakeData.foods_avoided },
+                    { label: 'Stress level', value: intakeData.stress_level ? `${intakeData.stress_level}/5` : null },
+                    { label: 'Sleep', value: intakeData.sleep_quality },
+                    { label: 'Exercise', value: intakeData.exercise_description },
+                    { label: 'Anything else', value: intakeData.anything_else },
+                  ].filter(({ value }) => value).map(({ label, value }) => (
+                    <div key={label}>
+                      <div className="text-xs font-medium text-gray-500 mb-1">{label}</div>
+                      <div className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2.5">{value}</div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           )}
