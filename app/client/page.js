@@ -74,15 +74,32 @@ function IntakeModal({ clientData, onComplete }) {
   const [submitting, setSubmitting] = useState(false)
   const [page, setPage] = useState(1)
 
-  async function submit() {
-    setSubmitting(true)
-    const { error } = await supabase.from('intake_forms').upsert(
-      { client_id: clientData.id, ...form },
-      { onConflict: 'client_id' }
-    )
-    if (!error) onComplete()
-    else { console.error('Intake error:', error); setSubmitting(false) }
+ async function submit() {
+  setSubmitting(true)
+  // First check if one already exists
+  const { data: existing } = await supabase
+    .from('intake_forms')
+    .select('id')
+    .eq('client_id', clientData.id)
+    .maybeSingle()
+
+  let error
+  if (existing) {
+    const res = await supabase
+      .from('intake_forms')
+      .update(form)
+      .eq('client_id', clientData.id)
+    error = res.error
+  } else {
+    const res = await supabase
+      .from('intake_forms')
+      .insert({ client_id: clientData.id, ...form })
+    error = res.error
   }
+
+  if (!error) onComplete()
+  else { console.error('Intake error:', error); setSubmitting(false) }
+ }
 
   const totalPages = 3
 
