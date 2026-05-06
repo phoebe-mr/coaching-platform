@@ -76,7 +76,6 @@ function IntakeModal({ clientData, onComplete }) {
 
  async function submit() {
   setSubmitting(true)
-  // First check if one already exists
   const { data: existing } = await supabase
     .from('intake_forms')
     .select('id')
