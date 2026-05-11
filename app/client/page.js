@@ -448,9 +448,8 @@ export default function ClientPage() {
       {sidebarOpen && <div className="fixed inset-0 bg-black bg-opacity-40 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {/* Left sidebar */}
-      <div className={`fixed top-0 left-0 h-full z-40 flex flex-col bg-white border-r border-gray-200 transition-all duration-200
-        ${sidebarOpen ? 'w-52' : 'w-16'}
-        lg:w-52 lg:static lg:flex`}>
+     <div className={`fixed top-0 left-0 h-full z-40 flex flex-col bg-white border-r border-gray-200 transition-all duration-200 w-52 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:flex`}>
+
         {/* Logo */}
         <div className="flex items-center justify-center h-16 border-b border-gray-100 px-3">
           <div className="hidden lg:block"><Logo /></div>
